@@ -1,0 +1,3 @@
+packages:
+  - 'packages/*'   # shared libraries (imported): types, ABI, eip-712 helpers
+  - 'services/*'   # deployable services (run): matcher, api, ...

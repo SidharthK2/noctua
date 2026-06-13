@@ -1,0 +1,21 @@
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+**/*.tmp
+
+# Node / pnpm (matcher + shared packages, added later)
+node_modules/
+dist/
+.turbo/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.log
