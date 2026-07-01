@@ -141,9 +141,23 @@ const quoteHash = await pub.readContract({ address: NOCTUA, abi: noctuaAbi, func
 let loan = await pub.readContract({ address: NOCTUA, abi: noctuaAbi, functionName: "loans", args: [quoteHash] })
 assert(loan[0].toLowerCase() === borrower.address.toLowerCase() && loan[1] === 1, "loan Active with correct borrower")
 
-// 5. close the RFQ off-chain
-const closed = await api("POST", `/rfqs/${rfq.id}/close`)
-assert(closed.status === "closed", "RFQ closed")
+// 5. the chain watcher observes the Filled event and closes the RFQ itself — no client call.
+const expectedDigest = await pub.readContract({
+  address: NOCTUA,
+  abi: noctuaAbi,
+  functionName: "hashQuote",
+  args: [onchainQuote],
+})
+const deadline = Date.now() + 10_000
+let watched
+while (Date.now() < deadline) {
+  watched = await api("GET", `/rfqs/${rfq.id}`)
+  if (watched.status === "filled") break
+  await new Promise((r) => setTimeout(r, 300))
+}
+assert(watched?.status === "filled", "watcher observed the Filled event and closed the RFQ")
+assert(watched.filledBy === expectedDigest, "RFQ records the filling quote's digest")
+assert(!!watched.fillTxHash, "RFQ records the fill transaction hash")
 
 // 6. repay before maturity
 const makerLoanBefore = await bal(LOAN, maker.address)
@@ -153,4 +167,49 @@ assert((await bal(COLL, borrower.address)) === borrowerCollBefore, "repay: colla
 loan = await pub.readContract({ address: NOCTUA, abi: noctuaAbi, functionName: "loans", args: [quoteHash] })
 assert(loan[1] === 2, "loan status Repaid")
 
-console.log("\nE2E PASS: RFQ -> signed quote -> on-chain fill -> repay, all assertions green")
+// 7. maker cancels a second, unfilled quote on-chain; the watcher should observe the
+// Cancelled event and remove it from the RFQ's quote listing.
+const now2 = (await pub.getBlock()).timestamp
+const maturity2 = now2 + 90n * 86_400n
+const rfq2 = await api("POST", "/rfqs", {
+  borrower: borrower.address,
+  loanAsset: LOAN,
+  collateralAsset: COLL,
+  principal: principal.toString(),
+  collateral: collateral.toString(),
+  maturity: maturity2.toString(),
+})
+const quote2 = {
+  maker: maker.address,
+  taker: borrower.address,
+  loanAsset: LOAN,
+  collateralAsset: COLL,
+  oracle: ORACLE,
+  principal,
+  repayment,
+  collateral,
+  lltv: 8n * 10n ** 17n,
+  maturity: maturity2,
+  expiry: now2 + 3_600n,
+  nonce: 0n,
+}
+const signature2 = await signQuote(maker, quote2, 31337, NOCTUA)
+await api("POST", `/rfqs/${rfq2.id}/quotes`, {
+  ...Object.fromEntries(Object.entries(quote2).map(([k, v]) => [k, v.toString()])),
+  signature: signature2,
+})
+const listedBeforeCancel = await api("GET", `/rfqs/${rfq2.id}/quotes`)
+assert(listedBeforeCancel.length === 1, "second quote listed before cancellation")
+
+await tx("maker", NOCTUA, noctuaAbi, "cancel", [quote2])
+
+const cancelDeadline = Date.now() + 10_000
+let listedAfterCancel = listedBeforeCancel
+while (Date.now() < cancelDeadline) {
+  listedAfterCancel = await api("GET", `/rfqs/${rfq2.id}/quotes`)
+  if (listedAfterCancel.length === 0) break
+  await new Promise((r) => setTimeout(r, 300))
+}
+assert(listedAfterCancel.length === 0, "watcher observed Cancelled and removed the quote from listing")
+
+console.log("\nE2E PASS: RFQ -> signed quote -> on-chain fill -> repay, plus watcher-driven close/cancel, all assertions green")

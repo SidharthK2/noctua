@@ -181,7 +181,11 @@ button:disabled {
   border-color: var(--good);
 }
 
-.badge-closed {
+.badge-filled {
+  color: var(--muted);
+}
+
+.badge-withdrawn {
   color: var(--muted);
 }
 

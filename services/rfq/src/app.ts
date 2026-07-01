@@ -23,7 +23,7 @@ export function createApp(config: Config, store: RfqStore = new MemoryRfqStore()
 
   app.get("/rfqs", (c) => {
     const status = c.req.query("status")
-    if (status && status !== "open" && status !== "closed") {
+    if (status && status !== "open" && status !== "filled" && status !== "withdrawn") {
       return c.json({ error: "invalid_status" }, 400)
     }
     const rfqs = store.listRfqs(status as RfqStatus | undefined)
@@ -130,9 +130,15 @@ export function createApp(config: Config, store: RfqStore = new MemoryRfqStore()
     return c.json(toJsonSafe(stored), 201)
   })
 
+  // Route path kept for backwards compatibility; behavior is now "withdraw" — RFQ closure
+  // itself is observed from chain events by the ChainWatcher, not trusted client calls.
   app.post("/rfqs/:id/close", (c) => {
-    const rfq = store.closeRfq(c.req.param("id"))
-    if (!rfq) return c.json({ error: "not_found" }, 404)
+    const existing = store.getRfq(c.req.param("id"))
+    if (!existing) return c.json({ error: "not_found" }, 404)
+    if (existing.status !== "open") {
+      return c.json({ error: "rfq_not_open" }, 409)
+    }
+    const rfq = store.withdrawRfq(existing.id)
     return c.json(toJsonSafe(rfq))
   })
 

@@ -1,7 +1,7 @@
 import { hashQuote, impliedAprWad } from "@noctua/shared"
 import { useEffect, useState } from "react"
 import type { QuoteWire, RfqWire } from "../api.js"
-import { closeRfq, createRfq, getRfq, listRfqs } from "../api.js"
+import { createRfq, getRfq, listRfqs } from "../api.js"
 import { COLLATERAL_ASSET_ADDRESS, CHAIN_ID, LOAN_ASSET_ADDRESS, NOCTUA_ADDRESS } from "../lib/addresses.js"
 import { erc20Abi, LOAN_STATUS, noctuaAbi } from "../lib/abi.js"
 import { borrowerAccount, borrowerWallet, publicClient } from "../lib/clients.js"
@@ -115,7 +115,8 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
       await publicClient.waitForTransactionReceipt({ hash: fillHash })
       onStatus({ kind: "tx", label: "filled quote", hash: fillHash })
 
-      await closeRfq(rfqId)
+      // The chain watcher observes the on-chain Filled event and marks the RFQ filled;
+      // the 3s poll above will pick up the status change.
       setAcceptedByRfqId((prev) => ({ ...prev, [rfqId]: quoteWire }))
       await refresh()
     } catch (err) {

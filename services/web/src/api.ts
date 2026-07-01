@@ -9,8 +9,10 @@ export type RfqWire = {
   principal: string
   collateral: string
   maturity: string
-  status: "open" | "closed"
+  status: "open" | "filled" | "withdrawn"
   createdAt: number
+  filledBy: Hex | null
+  fillTxHash: Hex | null
 }
 
 /** Quote shape as returned by the service — bigint fields are decimal strings on the wire. */
@@ -68,7 +70,7 @@ export function createRfq(input: {
   })
 }
 
-export function listRfqs(status?: "open" | "closed"): Promise<RfqWire[]> {
+export function listRfqs(status?: "open" | "filled" | "withdrawn"): Promise<RfqWire[]> {
   const qs = status ? `?status=${status}` : ""
   return request("GET", `/rfqs${qs}`)
 }
@@ -116,6 +118,7 @@ export function submitQuote(
   })
 }
 
-export function closeRfq(id: string): Promise<RfqWire> {
+/** Withdraws an open RFQ. Fills are observed from chain events by the watcher, not this call. */
+export function withdrawRfq(id: string): Promise<RfqWire> {
   return request("POST", `/rfqs/${id}/close`)
 }

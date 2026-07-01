@@ -11,6 +11,11 @@ const CONFIG: Config = {
   port: 3000,
   chainId: 31337,
   noctuaAddress: "0x00000000000000000000000000000000000000C7",
+  dbPath: ":memory:",
+  rpcUrl: "http://localhost:8545",
+  watchIntervalMs: 2000,
+  confirmations: 0,
+  startBlock: 0n,
 }
 
 const MAKER = privateKeyToAccount(
@@ -129,10 +134,47 @@ describe.each(storeFactories)("RFQ service (%s)", (_name, makeStore) => {
 
     const closeRes = await app.request(`/rfqs/${rfq.id}/close`, { method: "POST" })
     expect(closeRes.status).toBe(200)
-    expect((await closeRes.json()).status).toBe("closed")
+    expect((await closeRes.json()).status).toBe("withdrawn")
 
     const listOpenAfterClose = await app.request("/rfqs?status=open")
     expect(await listOpenAfterClose.json()).toHaveLength(0)
+  })
+
+  it("close is idempotent-safe: rejects withdrawing a non-open RFQ", async () => {
+    const createRes = await app.request("/rfqs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(rfqBody()),
+    })
+    const rfq = await createRes.json()
+
+    const first = await app.request(`/rfqs/${rfq.id}/close`, { method: "POST" })
+    expect(first.status).toBe(200)
+
+    const second = await app.request(`/rfqs/${rfq.id}/close`, { method: "POST" })
+    expect(second.status).toBe(409)
+    expect((await second.json()).error).toBe("rfq_not_open")
+  })
+
+  it("quote submission is rejected once the RFQ is withdrawn", async () => {
+    const createRes = await app.request("/rfqs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(rfqBody()),
+    })
+    const rfq = await createRes.json()
+
+    await app.request(`/rfqs/${rfq.id}/close`, { method: "POST" })
+
+    const quote = await buildQuote()
+    const sig = await signQuote(MAKER, quote, CONFIG.chainId, CONFIG.noctuaAddress)
+    const res = await app.request(`/rfqs/${rfq.id}/quotes`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(quoteToBody(quote, sig)),
+    })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toBe("rfq_not_open")
   })
 
   it("rejects a quote with an invalid signature", async () => {
