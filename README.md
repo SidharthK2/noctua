@@ -80,6 +80,34 @@ only the steps below.
    in the header to mint test DAI/WETH to your connected address — `ERC20Mock.mint` is public, so
    no separate funding step is required.
 
+## Hosting (Railway or any Docker host)
+
+The repo ships a single-service `Dockerfile`: one Node process serves the API (under `/api`),
+runs the chain watcher, and serves the built frontend from the same origin (no CORS, no second
+deployment). SQLite lives on a volume.
+
+On Railway: create a service from this repo (it picks up the `Dockerfile`), attach a **volume
+mounted at `/data`**, and set these service variables — the `VITE_*` ones are consumed at image
+build time, the rest at runtime:
+
+```shell
+# build-time (frontend)
+VITE_CHAIN_ID=84532
+VITE_RPC_URL=https://sepolia.base.org
+VITE_NOCTUA_ADDRESS=...   VITE_LOAN_ADDRESS=...
+VITE_COLLATERAL_ADDRESS=... VITE_ORACLE_ADDRESS=...
+# runtime (service + watcher)
+CHAIN_ID=84532
+RPC_URL=https://sepolia.base.org
+NOCTUA_ADDRESS=...
+START_BLOCK=<deploy block>
+CONFIRMATIONS=1
+```
+
+`PORT`, `DB_PATH=/data/noctua-rfq.db`, and `STATIC_DIR` are preset in the image. `GET /health`
+responds for healthchecks. The public Base Sepolia RPC is rate-limited — a free Alchemy/QuickNode
+endpoint is a drop-in `RPC_URL`/`VITE_RPC_URL` swap if the watcher gets flaky.
+
 ## Design choices (MVP)
 
 - **Implicit zero-coupon over stored-rate or tick-priced units**: quotes state amounts, not rates. Tick/unit fungibility (Midnight-style) only pays off in an open orderbook; RFQ quotes are bespoke, so the machinery is dropped.

@@ -12,6 +12,8 @@ export type Config = {
   watchIntervalMs: number
   confirmations: number
   startBlock: bigint
+  /** Directory of built frontend assets to serve alongside the API; null = API-only. */
+  staticDir: string | null
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -24,5 +26,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     watchIntervalMs: env.WATCH_INTERVAL_MS ? Number(env.WATCH_INTERVAL_MS) : 2000,
     confirmations: env.CONFIRMATIONS ? Number(env.CONFIRMATIONS) : 0,
     startBlock: env.START_BLOCK ? BigInt(env.START_BLOCK) : 0n,
+    staticDir: env.STATIC_DIR ?? null,
   }
 }

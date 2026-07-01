@@ -1,0 +1,11 @@
+.git
+node_modules
+**/node_modules
+**/dist
+contracts
+*.db
+*.db-journal
+*.db-wal
+.env
+.env.*
+README.md

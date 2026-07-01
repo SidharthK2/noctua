@@ -13,10 +13,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // The service mounts its API under /api (see services/rfq/src/index.ts), so the
+      // path passes through unchanged — dev and production share the same URL layout.
       "/api": {
         target: "http://localhost:3901",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
       },
     },
   },
