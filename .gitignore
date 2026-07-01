@@ -19,3 +19,8 @@ dist/
 .idea/
 .vscode/
 *.log
+
+# SQLite databases
+*.db
+*.db-journal
+*.db-wal
