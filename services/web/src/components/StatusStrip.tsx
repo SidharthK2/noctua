@@ -1,83 +1,72 @@
-import { useEffect, useState } from "react"
-import { COLLATERAL_ASSET_ADDRESS, LOAN_ASSET_ADDRESS, NOCTUA_ADDRESS } from "../lib/addresses.js"
-import { erc20Abi } from "../lib/abi.js"
-import { borrowerAccount, makerAccount, publicClient } from "../lib/clients.js"
-import { formatUnits18, shortAddr } from "../lib/format.js"
+import { formatAmount, shortAddr } from "../lib/format.js"
+import type { Balances } from "../lib/queries.js"
+import { useBalances } from "../lib/queries.js"
 import type { StatusEvent } from "../lib/status.js"
 
-type Balances = {
-  makerLoan: bigint
-  makerColl: bigint
-  borrowerLoan: bigint
-  borrowerColl: bigint
-  escrowLoan: bigint
-  escrowColl: bigint
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[0.6rem] uppercase tracking-wider text-zinc-600">{label}</span>
+      <span className="font-mono text-xs tabular-nums text-zinc-300">{value}</span>
+    </div>
+  )
 }
 
-const ZERO: Balances = {
-  makerLoan: 0n,
-  makerColl: 0n,
-  borrowerLoan: 0n,
-  borrowerColl: 0n,
-  escrowLoan: 0n,
-  escrowColl: 0n,
+function StatGroup({
+  label,
+  loan,
+  coll,
+}: {
+  label: string
+  loan: bigint | undefined
+  coll: bigint | undefined
+}) {
+  return (
+    <div className="flex items-center gap-4">
+      <span className="text-[0.6rem] font-medium uppercase tracking-widest text-zinc-500">
+        {label}
+      </span>
+      <Stat label="DAI" value={loan === undefined ? "—" : formatAmount(loan)} />
+      <Stat label="WETH" value={coll === undefined ? "—" : formatAmount(coll)} />
+    </div>
+  )
+}
+
+const EVENT_DOT: Record<StatusEvent["kind"], string> = {
+  tx: "bg-emerald-400",
+  info: "bg-zinc-400",
+  error: "bg-red-400",
 }
 
 export function StatusStrip({ lastEvent }: { lastEvent: StatusEvent | null }) {
-  const [balances, setBalances] = useState<Balances>(ZERO)
-
-  useEffect(() => {
-    const balanceOf = (token: `0x${string}`, holder: `0x${string}`) =>
-      publicClient.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [holder] })
-
-    const refresh = async () => {
-      const [makerLoan, makerColl, borrowerLoan, borrowerColl, escrowLoan, escrowColl] = await Promise.all([
-        balanceOf(LOAN_ASSET_ADDRESS, makerAccount.address),
-        balanceOf(COLLATERAL_ASSET_ADDRESS, makerAccount.address),
-        balanceOf(LOAN_ASSET_ADDRESS, borrowerAccount.address),
-        balanceOf(COLLATERAL_ASSET_ADDRESS, borrowerAccount.address),
-        balanceOf(LOAN_ASSET_ADDRESS, NOCTUA_ADDRESS),
-        balanceOf(COLLATERAL_ASSET_ADDRESS, NOCTUA_ADDRESS),
-      ])
-      setBalances({ makerLoan, makerColl, borrowerLoan, borrowerColl, escrowLoan, escrowColl })
-    }
-
-    refresh().catch(() => undefined)
-    const id = setInterval(() => refresh().catch(() => undefined), 3000)
-    return () => clearInterval(id)
-  }, [])
+  const { data: balances } = useBalances()
+  const b: Partial<Balances> = balances ?? {}
 
   return (
-    <footer className="status-strip">
-      <div className="balances">
-        <div>
-          <span className="label">Maker</span>
-          <span>{formatUnits18(balances.makerLoan)} DAI</span>
-          <span>{formatUnits18(balances.makerColl)} WETH</span>
-        </div>
-        <div>
-          <span className="label">Borrower</span>
-          <span>{formatUnits18(balances.borrowerLoan)} DAI</span>
-          <span>{formatUnits18(balances.borrowerColl)} WETH</span>
-        </div>
-        <div>
-          <span className="label">Noctua escrow</span>
-          <span>{formatUnits18(balances.escrowLoan)} DAI</span>
-          <span>{formatUnits18(balances.escrowColl)} WETH</span>
-        </div>
+    <footer className="fixed inset-x-0 bottom-0 flex flex-wrap items-center justify-between gap-x-8 gap-y-2 border-t border-zinc-800/80 bg-zinc-950/75 px-6 py-2.5 backdrop-blur-md">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <StatGroup label="Wallet" loan={b.walletLoan} coll={b.walletColl} />
+        <div className="hidden h-7 w-px bg-zinc-800/80 sm:block" />
+        <StatGroup label="Escrow" loan={b.escrowLoan} coll={b.escrowColl} />
       </div>
-      <div className="last-event">
-        {lastEvent === null && <span className="muted">no activity yet</span>}
-        {lastEvent?.kind === "tx" && (
-          <span className="event-tx">
-            {lastEvent.label}: {shortAddr(lastEvent.hash)}
-          </span>
-        )}
-        {lastEvent?.kind === "info" && <span className="event-info">{lastEvent.label}</span>}
-        {lastEvent?.kind === "error" && (
-          <span className="event-error">
-            {lastEvent.label}: {lastEvent.message}
-          </span>
+      <div className="flex items-center gap-2 font-mono text-xs">
+        {lastEvent === null ? (
+          <span className="text-zinc-600">no activity yet</span>
+        ) : (
+          <>
+            <span className={`size-1.5 rounded-full ${EVENT_DOT[lastEvent.kind]}`} />
+            {lastEvent.kind === "tx" && (
+              <span className="text-zinc-300">
+                {lastEvent.label} <span className="text-zinc-500">{shortAddr(lastEvent.hash)}</span>
+              </span>
+            )}
+            {lastEvent.kind === "info" && <span className="text-zinc-300">{lastEvent.label}</span>}
+            {lastEvent.kind === "error" && (
+              <span className="max-w-96 truncate text-red-400" title={lastEvent.message}>
+                {lastEvent.label}: {lastEvent.message}
+              </span>
+            )}
+          </>
         )}
       </div>
     </footer>

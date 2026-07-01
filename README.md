@@ -34,6 +34,52 @@ pnpm -r build && pnpm -r test                 # TS workspaces
 pnpm check                                    # biome
 ```
 
+## Deploying to Base Sepolia
+
+The web app and RFQ service are fully env-driven — no code changes are needed for a real deploy,
+only the steps below.
+
+1. **Deploy the contracts.** From the repo root, with a funded Base Sepolia deployer key:
+
+   ```shell
+   PRIVATE_KEY=0x... forge script contracts/script/DeployTestnet.s.sol:DeployTestnet \
+     --root contracts --rpc-url https://sepolia.base.org --broadcast
+   ```
+
+   This deploys `Noctua`, two `ERC20Mock`s ("Noctua Mock DAI" / "DAI", "Noctua Mock WETH" /
+   "WETH"), and an `OracleMock` seeded at `2000e36` (1 WETH = 2000 DAI). The script logs all four
+   addresses. Note the block number the deploy transactions landed in — that's `START_BLOCK`
+   below.
+
+2. **Configure the RFQ service** (`services/rfq`, config in `src/config.ts`, all env-driven already):
+
+   ```shell
+   RPC_URL=https://sepolia.base.org \
+   CHAIN_ID=84532 \
+   NOCTUA_ADDRESS=<deployed Noctua address> \
+   START_BLOCK=<deploy block number> \
+   CONFIRMATIONS=1 \
+     node services/rfq/dist/index.js
+   ```
+
+   `CONFIRMATIONS=1` (or a few more) is a reasonable default on a public testnet, vs. `0` for
+   instant-finality local anvil.
+
+3. **Configure the web app** (`services/web`, see `.env.example`):
+
+   ```shell
+   VITE_CHAIN_ID=84532
+   VITE_RPC_URL=https://sepolia.base.org
+   VITE_NOCTUA_ADDRESS=<deployed Noctua address>
+   VITE_LOAN_ADDRESS=<deployed DAI mock address>
+   VITE_COLLATERAL_ADDRESS=<deployed WETH mock address>
+   VITE_ORACLE_ADDRESS=<deployed OracleMock address>
+   ```
+
+   Connect an injected wallet (MetaMask or similar) on Base Sepolia and use the **faucet** button
+   in the header to mint test DAI/WETH to your connected address — `ERC20Mock.mint` is public, so
+   no separate funding step is required.
+
 ## Design choices (MVP)
 
 - **Implicit zero-coupon over stored-rate or tick-priced units**: quotes state amounts, not rates. Tick/unit fungibility (Midnight-style) only pays off in an open orderbook; RFQ quotes are bespoke, so the machinery is dropped.
@@ -41,4 +87,4 @@ pnpm check                                    # biome
 - **Calldata-over-storage**: the contract stores only `(borrower, status)` per loan; `repay`/`liquidate`/`claimDefault` take the full `Quote` again and re-derive its hash.
 - Fee-on-transfer / rebasing tokens unsupported. Reentrancy handled by strict checks-effects-interactions.
 
-Not yet built: partial fills, chain watcher for the RFQ service (close-on-fill is on trust), Postgres persistence, maker deposits/reputation, surplus auction on default.
+Not yet built: partial fills, Postgres persistence (SQLite via `node:sqlite` today), maker deposits/reputation, surplus auction on default.

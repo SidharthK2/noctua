@@ -1,36 +1,26 @@
-import { signQuote } from "@noctua/shared"
-import { useEffect, useState } from "react"
-import { maxUint256, zeroAddress } from "viem"
+import { Inbox, Loader2 } from "lucide-react"
+import { useState } from "react"
+import { useAccount } from "wagmi"
 import type { RfqWire } from "../api.js"
-import { listRfqs, submitQuote } from "../api.js"
-import { CHAIN_ID, NOCTUA_ADDRESS, ORACLE_ADDRESS } from "../lib/addresses.js"
-import { erc20Abi, noctuaAbi } from "../lib/abi.js"
-import { makerAccount, makerWallet, publicClient } from "../lib/clients.js"
-import { formatUnits18, parseUnits18 } from "../lib/format.js"
+import { formatAmount, formatCountdown, formatUnits18 } from "../lib/format.js"
+import { useOpenRfqs, useSendQuoteMutation } from "../lib/queries.js"
 import type { StatusEvent } from "../lib/status.js"
-
-const DEFAULT_LLTV = 800_000_000_000_000_000n // 0.8e18
+import { useNowSeconds } from "../lib/use-now-seconds.js"
+import { AddressPill } from "./address-pill.js"
+import { Button } from "./ui/button.js"
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card.js"
+import { Input } from "./ui/input.js"
 
 export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => void }) {
-  const [openRfqs, setOpenRfqs] = useState<RfqWire[]>([])
   const [quotingId, setQuotingId] = useState<string | null>(null)
   const [repaymentInput, setRepaymentInput] = useState("")
   const [expiryMinutesInput, setExpiryMinutesInput] = useState("60")
   const [oracleOn, setOracleOn] = useState(true)
-  const [busyId, setBusyId] = useState<string | null>(null)
+  const nowSec = useNowSeconds()
+  const { address, isConnected } = useAccount()
 
-  async function refresh() {
-    setOpenRfqs(await listRfqs("open"))
-  }
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: poll on mount only, refresh/onStatus are stable enough for a demo
-  useEffect(() => {
-    refresh().catch((err) => onStatus({ kind: "error", label: "refresh open RFQs", message: (err as Error).message }))
-    const id = setInterval(() => {
-      refresh().catch((err) => onStatus({ kind: "error", label: "refresh open RFQs", message: (err as Error).message }))
-    }, 3000)
-    return () => clearInterval(id)
-  }, [])
+  const { data: openRfqs = [], isLoading } = useOpenRfqs()
+  const sendQuote = useSendQuoteMutation(onStatus)
 
   function startQuote(rfq: RfqWire) {
     setQuotingId(rfq.id)
@@ -40,100 +30,155 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
     setOracleOn(true)
   }
 
-  async function sendQuote(rfq: RfqWire) {
-    setBusyId(rfq.id)
-    try {
-      const approveHash = await makerWallet.writeContract({
-        address: rfq.loanAsset,
-        abi: erc20Abi,
-        functionName: "approve",
-        args: [NOCTUA_ADDRESS, maxUint256],
-      })
-      await publicClient.waitForTransactionReceipt({ hash: approveHash })
-      onStatus({ kind: "tx", label: "approved loan asset", hash: approveHash })
+  function onSendQuote(rfq: RfqWire) {
+    sendQuote.mutate(
+      { rfq, repaymentInput, expiryMinutesInput, oracleOn },
+      { onSuccess: () => setQuotingId(null) },
+    )
+  }
 
-      const nonce = await publicClient.readContract({
-        address: NOCTUA_ADDRESS,
-        abi: noctuaAbi,
-        functionName: "nonces",
-        args: [makerAccount.address],
-      })
-      const block = await publicClient.getBlock()
-      const expiry = block.timestamp + BigInt(expiryMinutesInput) * 60n
-
-      const quote = {
-        maker: makerAccount.address,
-        taker: rfq.borrower,
-        loanAsset: rfq.loanAsset,
-        collateralAsset: rfq.collateralAsset,
-        oracle: oracleOn ? ORACLE_ADDRESS : zeroAddress,
-        principal: BigInt(rfq.principal),
-        repayment: parseUnits18(repaymentInput),
-        collateral: BigInt(rfq.collateral),
-        lltv: oracleOn ? DEFAULT_LLTV : 0n,
-        maturity: BigInt(rfq.maturity),
-        expiry,
-        nonce,
-      }
-
-      const signature = await signQuote(makerAccount, quote, CHAIN_ID, NOCTUA_ADDRESS)
-      await submitQuote(rfq.id, { ...quote, signature })
-      onStatus({ kind: "info", label: `sent quote for RFQ ${rfq.id.slice(0, 8)}` })
-      setQuotingId(null)
-    } catch (err) {
-      onStatus({ kind: "error", label: "send quote failed", message: (err as Error).message })
-    } finally {
-      setBusyId(null)
-    }
+  if (!isConnected || !address) {
+    return (
+      <Card className="border-zinc-800/80 shadow-lg shadow-black/20">
+        <CardHeader className="border-b border-zinc-800/60 pb-4">
+          <CardTitle className="text-xs font-medium uppercase tracking-widest text-zinc-400">
+            Maker
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center gap-2 py-12 text-center">
+            <Inbox className="size-5 text-zinc-700" />
+            <p className="text-sm text-zinc-600">Connect a wallet to quote on open requests.</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
-    <section className="panel">
-      <h2>Maker — {makerAccount.address}</h2>
-
-      <div className="rfq-list">
-        {openRfqs.length === 0 && <p className="muted">No open RFQs.</p>}
-        {openRfqs.map((rfq) => (
-          <div className="rfq-card" key={rfq.id}>
-            <div className="rfq-card-header">
-              <span>
-                {formatUnits18(BigInt(rfq.principal))} DAI / {formatUnits18(BigInt(rfq.collateral))} WETH /{" "}
-                {rfq.borrower.slice(0, 8)}…
-              </span>
-              {quotingId !== rfq.id && (
-                <button type="button" onClick={() => startQuote(rfq)}>
-                  Quote
-                </button>
-              )}
-            </div>
-
-            {quotingId === rfq.id && (
-              <div className="quote-form">
-                <label>
-                  Repayment (DAI)
-                  <input value={repaymentInput} onChange={(e) => setRepaymentInput(e.target.value)} />
-                </label>
-                <label>
-                  Expiry (minutes)
-                  <input value={expiryMinutesInput} onChange={(e) => setExpiryMinutesInput(e.target.value)} />
-                </label>
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={oracleOn} onChange={(e) => setOracleOn(e.target.checked)} />
-                  Oracle-backed (lltv 0.8)
-                </label>
-                <div className="quote-form-actions">
-                  <button type="button" disabled={busyId === rfq.id} onClick={() => sendQuote(rfq)}>
-                    Sign &amp; send quote
-                  </button>
-                  <button type="button" onClick={() => setQuotingId(null)}>
-                    Cancel
-                  </button>
+    <Card className="border-zinc-800/80 shadow-lg shadow-black/20">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-zinc-800/60 pb-4">
+        <CardTitle className="text-xs font-medium uppercase tracking-widest text-zinc-400">
+          Maker
+        </CardTitle>
+        <AddressPill address={address} />
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {isLoading && (
+          <div className="flex items-center justify-center gap-2 py-12 text-sm text-zinc-600">
+            <Loader2 className="size-4 animate-spin" /> Loading requests…
+          </div>
+        )}
+        {!isLoading && openRfqs.length === 0 && (
+          <div className="flex flex-col items-center gap-2 py-12 text-center">
+            <Inbox className="size-5 text-zinc-700" />
+            <p className="text-sm text-zinc-600">No open requests — waiting for borrowers.</p>
+          </div>
+        )}
+        {openRfqs.map((rfq) => {
+          const busy = sendQuote.isPending && sendQuote.variables?.rfq.id === rfq.id
+          return (
+            <div
+              key={rfq.id}
+              className="flex flex-col gap-3 rounded-lg border border-zinc-800/70 p-4 transition-colors hover:border-zinc-800"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <span className="font-mono text-base tabular-nums text-zinc-100">
+                    {formatAmount(BigInt(rfq.principal))}
+                  </span>
+                  <span className="text-xs text-zinc-500">DAI</span>
+                  <span className="text-zinc-700">·</span>
+                  <span className="font-mono text-sm tabular-nums text-zinc-400">
+                    {formatAmount(BigInt(rfq.collateral))}
+                  </span>
+                  <span className="text-xs text-zinc-500">WETH collateral</span>
+                  <span className="text-zinc-700">·</span>
+                  <span className="text-xs tabular-nums text-zinc-500">
+                    {formatCountdown(BigInt(rfq.maturity), nowSec)} term
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <AddressPill address={rfq.borrower} />
+                  {quotingId !== rfq.id && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={sendQuote.isPending}
+                      onClick={() => startQuote(rfq)}
+                    >
+                      Quote
+                    </Button>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </section>
+
+              {quotingId === rfq.id && (
+                <div className="flex flex-wrap items-end gap-3 rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-4">
+                  <label
+                    className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-zinc-500"
+                    htmlFor={`quote-repayment-${rfq.id}`}
+                  >
+                    Repayment · DAI
+                    <Input
+                      id={`quote-repayment-${rfq.id}`}
+                      className="w-32 text-right font-mono tabular-nums"
+                      value={repaymentInput}
+                      onChange={(e) => setRepaymentInput(e.target.value)}
+                    />
+                  </label>
+                  <label
+                    className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-zinc-500"
+                    htmlFor={`quote-expiry-${rfq.id}`}
+                  >
+                    Expiry · minutes
+                    <Input
+                      id={`quote-expiry-${rfq.id}`}
+                      className="w-24 text-right font-mono tabular-nums"
+                      value={expiryMinutesInput}
+                      onChange={(e) => setExpiryMinutesInput(e.target.value)}
+                    />
+                  </label>
+                  <label className="flex h-9 flex-row items-center gap-2 text-xs text-zinc-400">
+                    <input
+                      type="checkbox"
+                      checked={oracleOn}
+                      onChange={(e) => setOracleOn(e.target.checked)}
+                      className="size-4 rounded border-zinc-800 bg-zinc-900 accent-emerald-500"
+                    />
+                    Oracle-backed · lltv 0.8
+                  </label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={sendQuote.isPending}
+                      onClick={() => onSendQuote(rfq)}
+                    >
+                      {busy ? (
+                        <>
+                          <Loader2 className="size-3.5 animate-spin" /> Signing
+                        </>
+                      ) : (
+                        "Sign & send"
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-zinc-500 hover:text-zinc-300"
+                      onClick={() => setQuotingId(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </CardContent>
+    </Card>
   )
 }

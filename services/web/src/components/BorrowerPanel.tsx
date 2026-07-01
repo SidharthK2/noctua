@@ -1,53 +1,103 @@
 import { impliedAprWad } from "@noctua/shared"
-import { useEffect, useState } from "react"
-import type { QuoteWire, RfqWire } from "../api.js"
-import { createRfq, getRfq, listRfqs } from "../api.js"
-import { COLLATERAL_ASSET_ADDRESS, LOAN_ASSET_ADDRESS, NOCTUA_ADDRESS } from "../lib/addresses.js"
-import { erc20Abi, noctuaAbi } from "../lib/abi.js"
-import { borrowerAccount, borrowerWallet, publicClient } from "../lib/clients.js"
-import { formatAprPct, formatCountdown, formatUnits18, parseUnits18 } from "../lib/format.js"
+import { ChevronDown, ChevronRight, Loader2, MoonStar } from "lucide-react"
+import { useState } from "react"
+import { useAccount } from "wagmi"
+import type { QuoteWire } from "../api.js"
+import { formatAmount, formatAprPct, formatCountdown } from "../lib/format.js"
+import type { RfqDetail } from "../lib/queries.js"
+import {
+  useAcceptQuoteMutation,
+  useMyRfqs,
+  usePostRfqMutation,
+  useRepayLoanMutation,
+} from "../lib/queries.js"
 import { wireQuoteToOnchain } from "../lib/quote.js"
 import type { StatusEvent } from "../lib/status.js"
+import { useNowSeconds } from "../lib/use-now-seconds.js"
+import { AddressPill } from "./address-pill.js"
+import type { BadgeStatus } from "./status-badge.js"
+import { StatusBadge } from "./status-badge.js"
+import { Button } from "./ui/button.js"
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card.js"
+import { Input } from "./ui/input.js"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table.js"
 
-type RfqDetail = RfqWire & { quotes: QuoteWire[] }
+function AmountLine({
+  principal,
+  collateral,
+  maturity,
+  nowSec,
+}: {
+  principal: bigint
+  collateral: bigint
+  maturity: bigint
+  nowSec: bigint
+}) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <span className="font-mono text-base tabular-nums text-zinc-100">
+        {formatAmount(principal)}
+      </span>
+      <span className="text-xs text-zinc-500">DAI</span>
+      <span className="text-zinc-700">·</span>
+      <span className="font-mono text-sm tabular-nums text-zinc-400">
+        {formatAmount(collateral)}
+      </span>
+      <span className="text-xs text-zinc-500">WETH collateral</span>
+      <span className="text-zinc-700">·</span>
+      <span className="text-xs tabular-nums text-zinc-500">
+        matures in {formatCountdown(maturity, nowSec)}
+      </span>
+    </div>
+  )
+}
 
-const LOAN_STATUS_LABEL = {
-  active: "Active",
-  repaid: "Repaid",
-  liquidated: "Liquidated",
-  defaulted: "Defaulted",
+const LOAN_STATUS_TEXT = {
+  repaid: "Loan repaid — collateral returned.",
+  liquidated: "Position was liquidated.",
+  defaulted: "Loan defaulted — collateral forfeited.",
 } as const
+
+/** An RFQ is inactive once nothing further can happen to it from the borrower's side. */
+function isInactive(detail: RfqDetail): boolean {
+  if (detail.status === "withdrawn") return true
+  return detail.loanStatus !== null && detail.loanStatus !== "active"
+}
 
 export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => void }) {
   const [principalInput, setPrincipalInput] = useState("10000")
   const [collateralInput, setCollateralInput] = useState("10")
   const [daysInput, setDaysInput] = useState("90")
-  const [myRfqs, setMyRfqs] = useState<RfqDetail[]>([])
   const [acceptedByRfqId, setAcceptedByRfqId] = useState<Record<string, QuoteWire>>({})
-  const [busyId, setBusyId] = useState<string | null>(null)
-  const [nowSec, setNowSec] = useState(() => BigInt(Math.floor(Date.now() / 1000)))
+  const [confirmingRepay, setConfirmingRepay] = useState<Record<string, boolean>>({})
+  const [showCompleted, setShowCompleted] = useState(false)
+  const nowSec = useNowSeconds()
+  const { address, isConnected } = useAccount()
 
-  async function refresh() {
-    const all = await listRfqs()
-    const mine = all.filter((r) => r.borrower.toLowerCase() === borrowerAccount.address.toLowerCase())
-    const details = await Promise.all(mine.map((r) => getRfq(r.id)))
-    details.sort((a, b) => b.createdAt - a.createdAt)
-    setMyRfqs(details)
+  const { data: myRfqs = [], isLoading } = useMyRfqs()
+  const postRfq = usePostRfqMutation(onStatus)
+  const acceptQuote = useAcceptQuoteMutation(onStatus)
+  const repayLoan = useRepayLoanMutation(onStatus)
+
+  if (!isConnected || !address) {
+    return (
+      <Card className="border-zinc-800/80 shadow-lg shadow-black/20">
+        <CardHeader className="border-b border-zinc-800/60 pb-4">
+          <CardTitle className="text-xs font-medium uppercase tracking-widest text-zinc-400">
+            Borrower
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center gap-2 py-12 text-center">
+            <MoonStar className="size-5 text-zinc-700" />
+            <p className="text-sm text-zinc-600">
+              Connect a wallet to post requests and manage loans.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: poll on mount only, refresh/onStatus are stable enough for a demo
-  useEffect(() => {
-    refresh().catch((err) => onStatus({ kind: "error", label: "refresh RFQs", message: (err as Error).message }))
-    const id = setInterval(() => {
-      refresh().catch((err) => onStatus({ kind: "error", label: "refresh RFQs", message: (err as Error).message }))
-    }, 3000)
-    return () => clearInterval(id)
-  }, [])
-
-  useEffect(() => {
-    const id = setInterval(() => setNowSec(BigInt(Math.floor(Date.now() / 1000))), 1000)
-    return () => clearInterval(id)
-  }, [])
 
   // The quote a loan was opened with: taken from in-memory state right after Accept (before the
   // watcher marks the RFQ filled), then from the persisted filledBy digest so it survives reloads.
@@ -60,204 +110,289 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
     return undefined
   }
 
-  async function postRfq(e: React.FormEvent) {
+  function onPostRfq(e: React.FormEvent) {
     e.preventDefault()
-    setBusyId("post")
-    try {
-      const block = await publicClient.getBlock()
-      const maturity = block.timestamp + BigInt(daysInput) * 86_400n
-      const rfq = await createRfq({
-        borrower: borrowerAccount.address,
-        loanAsset: LOAN_ASSET_ADDRESS,
-        collateralAsset: COLLATERAL_ASSET_ADDRESS,
-        principal: parseUnits18(principalInput),
-        collateral: parseUnits18(collateralInput),
-        maturity,
-      })
-      onStatus({ kind: "info", label: `posted RFQ ${rfq.id.slice(0, 8)}` })
-      await refresh()
-    } catch (err) {
-      onStatus({ kind: "error", label: "post RFQ failed", message: (err as Error).message })
-    } finally {
-      setBusyId(null)
-    }
+    postRfq.mutate({ principalInput, collateralInput, daysInput })
   }
 
-  async function accept(rfqId: string, quoteWire: QuoteWire) {
-    setBusyId(quoteWire.digest)
-    try {
-      const onchain = wireQuoteToOnchain(quoteWire.quote)
-
-      const approveHash = await borrowerWallet.writeContract({
-        address: onchain.collateralAsset,
-        abi: erc20Abi,
-        functionName: "approve",
-        args: [NOCTUA_ADDRESS, onchain.collateral],
-      })
-      await publicClient.waitForTransactionReceipt({ hash: approveHash })
-      onStatus({ kind: "tx", label: "approved collateral", hash: approveHash })
-
-      const fillHash = await borrowerWallet.writeContract({
-        address: NOCTUA_ADDRESS,
-        abi: noctuaAbi,
-        functionName: "fill",
-        args: [onchain, quoteWire.signature],
-      })
-      await publicClient.waitForTransactionReceipt({ hash: fillHash })
-      onStatus({ kind: "tx", label: "filled quote", hash: fillHash })
-
-      // The chain watcher observes the on-chain Filled event and marks the RFQ filled;
-      // the 3s poll above will pick up the status change.
-      setAcceptedByRfqId((prev) => ({ ...prev, [rfqId]: quoteWire }))
-      await refresh()
-    } catch (err) {
-      onStatus({ kind: "error", label: "accept failed", message: (err as Error).message })
-    } finally {
-      setBusyId(null)
-    }
+  function onAccept(rfqId: string, quoteWire: QuoteWire) {
+    setAcceptedByRfqId((prev) => ({ ...prev, [rfqId]: quoteWire }))
+    acceptQuote.mutate(
+      { rfqId, quoteWire },
+      {
+        // If the fill fails, drop the in-memory bridge so the card doesn't sit on
+        // "awaiting confirmation" forever — the quote table comes back instead.
+        onError: () => {
+          setAcceptedByRfqId((prev) => {
+            const { [rfqId]: _dropped, ...rest } = prev
+            return rest
+          })
+        },
+      },
+    )
   }
 
-  async function repay(_rfqId: string, quoteWire: QuoteWire) {
-    setBusyId(`repay-${quoteWire.digest}`)
-    try {
-      const onchain = wireQuoteToOnchain(quoteWire.quote)
+  function onRepay(rfqId: string, quoteWire: QuoteWire) {
+    repayLoan.mutate(
+      { rfqId, quoteWire },
+      {
+        // The tx confirms near-instantly on a local chain but the watcher takes a poll or two
+        // to flip loanStatus — hold a "confirming" state so the UI never snaps back to Repay.
+        onSuccess: () => {
+          setConfirmingRepay((prev) => ({ ...prev, [quoteWire.digest]: true }))
+        },
+      },
+    )
+  }
 
-      const approveHash = await borrowerWallet.writeContract({
-        address: onchain.loanAsset,
-        abi: erc20Abi,
-        functionName: "approve",
-        args: [NOCTUA_ADDRESS, onchain.repayment],
-      })
-      await publicClient.waitForTransactionReceipt({ hash: approveHash })
-      onStatus({ kind: "tx", label: "approved repayment", hash: approveHash })
+  const activeRfqs = myRfqs.filter((d) => !isInactive(d))
+  const completedRfqs = myRfqs.filter(isInactive)
 
-      const repayHash = await borrowerWallet.writeContract({
-        address: NOCTUA_ADDRESS,
-        abi: noctuaAbi,
-        functionName: "repay",
-        args: [onchain],
-      })
-      await publicClient.waitForTransactionReceipt({ hash: repayHash })
-      onStatus({ kind: "tx", label: "repaid loan", hash: repayHash })
+  const renderRfqCard = (detail: RfqDetail) => {
+    const accepted = acceptedQuoteFor(detail)
+    const repaying =
+      repayLoan.isPending && repayLoan.variables?.quoteWire.digest === accepted?.digest
+    const confirming =
+      accepted !== undefined &&
+      confirmingRepay[accepted.digest] === true &&
+      detail.loanStatus === "active"
+    return (
+      <div
+        key={detail.id}
+        className="flex flex-col gap-3 rounded-lg border border-zinc-800/70 p-4 transition-colors hover:border-zinc-800"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <AmountLine
+            principal={BigInt(detail.principal)}
+            collateral={BigInt(detail.collateral)}
+            maturity={BigInt(detail.maturity)}
+            nowSec={nowSec}
+          />
+          <StatusBadge status={detail.status as BadgeStatus} />
+        </div>
 
-      // The chain watcher observes the on-chain Repaid event and flips loanStatus itself;
-      // the RFQ refresh poll will pick up the change within a poll or two.
-      await refresh()
-    } catch (err) {
-      onStatus({ kind: "error", label: "repay failed", message: (err as Error).message })
-    } finally {
-      setBusyId(null)
-    }
+        {accepted && (
+          <div className="flex items-center gap-3 rounded-lg border border-zinc-800/60 bg-zinc-950/60 p-3 text-sm">
+            {detail.loanStatus === null ? (
+              <>
+                <StatusBadge status="pending" />
+                <span className="text-zinc-500">Awaiting chain confirmation…</span>
+              </>
+            ) : confirming ? (
+              <>
+                <StatusBadge status="pending" />
+                <span className="flex items-center gap-2 text-zinc-500">
+                  <Loader2 className="size-3.5 animate-spin" /> Confirming repayment…
+                </span>
+              </>
+            ) : detail.loanStatus === "active" ? (
+              <>
+                <StatusBadge status="active" />
+                <span className="flex-1 text-zinc-500">
+                  Owes{" "}
+                  <span className="font-mono tabular-nums text-zinc-300">
+                    {formatAmount(BigInt(accepted.quote.repayment))} DAI
+                  </span>{" "}
+                  by maturity
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={repayLoan.isPending}
+                  onClick={() => onRepay(detail.id, accepted)}
+                >
+                  {repaying ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" /> Repaying
+                    </>
+                  ) : (
+                    "Repay"
+                  )}
+                </Button>
+              </>
+            ) : (
+              <>
+                <StatusBadge status={detail.loanStatus} />
+                <span className="text-zinc-500">{LOAN_STATUS_TEXT[detail.loanStatus]}</span>
+              </>
+            )}
+          </div>
+        )}
+
+        {!accepted && detail.status === "open" && (
+          <Table>
+            <TableHeader>
+              <TableRow className="border-zinc-800/50 hover:bg-transparent">
+                <TableHead className="h-8 text-right text-[0.65rem] uppercase tracking-wider">
+                  Repayment
+                </TableHead>
+                <TableHead className="h-8 text-right text-[0.65rem] uppercase tracking-wider">
+                  APR
+                </TableHead>
+                <TableHead className="h-8 text-right text-[0.65rem] uppercase tracking-wider">
+                  Expires
+                </TableHead>
+                <TableHead className="h-8" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {detail.quotes.map((qw) => {
+                const onchain = wireQuoteToOnchain(qw.quote)
+                let apr = "—"
+                try {
+                  apr = formatAprPct(impliedAprWad(onchain, nowSec))
+                } catch {
+                  apr = "—"
+                }
+                const busy =
+                  acceptQuote.isPending && acceptQuote.variables?.quoteWire.digest === qw.digest
+                return (
+                  <TableRow
+                    key={qw.digest}
+                    className="border-zinc-800/50 transition-colors hover:bg-zinc-800/20"
+                  >
+                    <TableCell className="text-right font-mono tabular-nums text-zinc-200">
+                      {formatAmount(onchain.repayment)} <span className="text-zinc-500">DAI</span>
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-medium tabular-nums text-emerald-400">
+                      {apr}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums text-zinc-400">
+                      {formatCountdown(onchain.expiry, nowSec)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={acceptQuote.isPending || detail.status !== "open"}
+                        onClick={() => onAccept(detail.id, qw)}
+                      >
+                        {busy ? (
+                          <>
+                            <Loader2 className="size-3.5 animate-spin" /> Accepting
+                          </>
+                        ) : (
+                          "Accept"
+                        )}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+              {detail.quotes.length === 0 && (
+                <TableRow className="border-zinc-800/50 hover:bg-transparent">
+                  <TableCell colSpan={4} className="py-6 text-center">
+                    <span className="inline-flex items-center gap-2 text-sm text-zinc-600">
+                      <span className="size-1.5 animate-pulse rounded-full bg-zinc-600" />
+                      Waiting for quotes
+                    </span>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        )}
+      </div>
+    )
   }
 
   return (
-    <section className="panel">
-      <h2>Borrower — {borrowerAccount.address}</h2>
+    <Card className="border-zinc-800/80 shadow-lg shadow-black/20">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-zinc-800/60 pb-4">
+        <CardTitle className="text-xs font-medium uppercase tracking-widest text-zinc-400">
+          Borrower
+        </CardTitle>
+        <AddressPill address={address} />
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <form
+          className="flex flex-wrap items-end gap-3 rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-4"
+          onSubmit={onPostRfq}
+        >
+          <label
+            className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-zinc-500"
+            htmlFor="rfq-principal"
+          >
+            Principal · DAI
+            <Input
+              id="rfq-principal"
+              className="w-32 text-right font-mono tabular-nums"
+              value={principalInput}
+              onChange={(e) => setPrincipalInput(e.target.value)}
+            />
+          </label>
+          <label
+            className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-zinc-500"
+            htmlFor="rfq-collateral"
+          >
+            Collateral · WETH
+            <Input
+              id="rfq-collateral"
+              className="w-32 text-right font-mono tabular-nums"
+              value={collateralInput}
+              onChange={(e) => setCollateralInput(e.target.value)}
+            />
+          </label>
+          <label
+            className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-zinc-500"
+            htmlFor="rfq-days"
+          >
+            Term · days
+            <Input
+              id="rfq-days"
+              className="w-24 text-right font-mono tabular-nums"
+              value={daysInput}
+              onChange={(e) => setDaysInput(e.target.value)}
+            />
+          </label>
+          <Button type="submit" disabled={postRfq.isPending} className="min-w-28">
+            {postRfq.isPending ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" /> Posting
+              </>
+            ) : (
+              "Post RFQ"
+            )}
+          </Button>
+        </form>
 
-      <form className="rfq-form" onSubmit={postRfq}>
-        <label>
-          Principal (DAI)
-          <input value={principalInput} onChange={(e) => setPrincipalInput(e.target.value)} />
-        </label>
-        <label>
-          Collateral (WETH)
-          <input value={collateralInput} onChange={(e) => setCollateralInput(e.target.value)} />
-        </label>
-        <label>
-          Term (days)
-          <input value={daysInput} onChange={(e) => setDaysInput(e.target.value)} />
-        </label>
-        <button type="submit" disabled={busyId === "post"}>
-          Post RFQ
-        </button>
-      </form>
+        <div className="flex flex-col gap-3">
+          {isLoading && (
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-zinc-600">
+              <Loader2 className="size-4 animate-spin" /> Loading requests…
+            </div>
+          )}
+          {!isLoading && myRfqs.length === 0 && (
+            <div className="flex flex-col items-center gap-2 py-12 text-center">
+              <MoonStar className="size-5 text-zinc-700" />
+              <p className="text-sm text-zinc-600">No requests yet — post one above.</p>
+            </div>
+          )}
+          {activeRfqs.map(renderRfqCard)}
 
-      <div className="rfq-list">
-        {myRfqs.length === 0 && <p className="muted">No RFQs posted yet.</p>}
-        {myRfqs.map((detail) => {
-          const accepted = acceptedQuoteFor(detail)
-          return (
-            <div className="rfq-card" key={detail.id}>
-              <div className="rfq-card-header">
-                <span>
-                  {formatUnits18(BigInt(detail.principal))} DAI / {formatUnits18(BigInt(detail.collateral))} WETH
-                </span>
-                <span className={`badge badge-${detail.status}`}>{detail.status}</span>
-              </div>
-
-              {accepted && (
-                <div className="loan-status">
-                  {detail.loanStatus === null ? (
-                    <>Loan status: pending confirmation…</>
-                  ) : detail.loanStatus === "active" ? (
-                    <>
-                      Loan status: <strong>Active</strong>
-                      <button
-                        type="button"
-                        disabled={busyId === `repay-${accepted.digest}`}
-                        onClick={() => repay(detail.id, accepted)}
-                      >
-                        Repay {formatUnits18(BigInt(accepted.quote.repayment))} DAI
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      Loan status: <strong>{LOAN_STATUS_LABEL[detail.loanStatus]}</strong>
-                    </>
-                  )}
+          {completedRfqs.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCompleted((v) => !v)}
+                className="flex items-center gap-1.5 self-start text-[0.65rem] font-medium uppercase tracking-widest text-zinc-500 transition-colors hover:text-zinc-300"
+              >
+                {showCompleted ? (
+                  <ChevronDown className="size-3.5" />
+                ) : (
+                  <ChevronRight className="size-3.5" />
+                )}
+                Completed · {completedRfqs.length}
+              </button>
+              {showCompleted && (
+                <div className="flex flex-col gap-3 opacity-70">
+                  {completedRfqs.map(renderRfqCard)}
                 </div>
               )}
-
-              {!accepted && (
-                <table className="quote-table">
-                  <thead>
-                    <tr>
-                      <th>Repayment</th>
-                      <th>APR</th>
-                      <th>Expires</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detail.quotes.map((qw) => {
-                      const onchain = wireQuoteToOnchain(qw.quote)
-                      let apr = "—"
-                      try {
-                        apr = formatAprPct(impliedAprWad(onchain, nowSec))
-                      } catch {
-                        apr = "—"
-                      }
-                      return (
-                        <tr key={qw.digest}>
-                          <td>{formatUnits18(onchain.repayment)} DAI</td>
-                          <td>{apr}</td>
-                          <td>{formatCountdown(onchain.expiry, nowSec)}</td>
-                          <td>
-                            <button
-                              type="button"
-                              disabled={busyId === qw.digest || detail.status !== "open"}
-                              onClick={() => accept(detail.id, qw)}
-                            >
-                              Accept
-                            </button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                    {detail.quotes.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="muted">
-                          Waiting for quotes…
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              )}
             </div>
-          )
-        })}
-      </div>
-    </section>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
