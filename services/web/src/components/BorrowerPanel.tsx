@@ -43,9 +43,22 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
     return () => clearInterval(id)
   }, [])
 
+  // The quote a loan was opened with: taken from in-memory state right after Accept (before the
+  // watcher marks the RFQ filled), then from the persisted filledBy digest so it survives reloads.
+  function acceptedQuoteFor(detail: RfqDetail): QuoteWire | undefined {
+    const inMemory = acceptedByRfqId[detail.id]
+    if (inMemory) return inMemory
+    if (detail.status === "filled" && detail.filledBy) {
+      return detail.quotes.find((q) => q.digest === detail.filledBy)
+    }
+    return undefined
+  }
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: onStatus identity churns every render
   useEffect(() => {
-    const entries = Object.entries(acceptedByRfqId)
+    const entries = myRfqs
+      .map((detail) => [detail.id, acceptedQuoteFor(detail)] as const)
+      .filter((entry): entry is readonly [string, QuoteWire] => entry[1] !== undefined)
     if (entries.length === 0) return
     const poll = async () => {
       const updates: Record<string, number> = {}
@@ -67,7 +80,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
       poll().catch((err) => onStatus({ kind: "error", label: "poll loan status", message: (err as Error).message }))
     }, 3000)
     return () => clearInterval(id)
-  }, [acceptedByRfqId])
+  }, [acceptedByRfqId, myRfqs])
 
   async function postRfq(e: React.FormEvent) {
     e.preventDefault()
@@ -181,7 +194,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
       <div className="rfq-list">
         {myRfqs.length === 0 && <p className="muted">No RFQs posted yet.</p>}
         {myRfqs.map((detail) => {
-          const accepted = acceptedByRfqId[detail.id]
+          const accepted = acceptedQuoteFor(detail)
           const loanStatus = loanStatusByRfqId[detail.id]
           return (
             <div className="rfq-card" key={detail.id}>

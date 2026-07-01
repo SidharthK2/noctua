@@ -29,8 +29,8 @@ deploy() {
     --rpc-url "$RPC_URL" \
     --private-key "$DEPLOYER_KEY" \
     --broadcast \
-    "$@" \
-    --json | tee /dev/stderr | python3 -c 'import json,sys; print(json.load(sys.stdin)["deployedTo"])'
+    --json \
+    "$@" | jq -r .deployedTo
 }
 
 echo "==> Deploying Noctua"
@@ -43,7 +43,7 @@ echo "==> Deploying Mock WETH"
 WETH=$(deploy test/mocks/ERC20Mock.sol:ERC20Mock --constructor-args "Mock WETH" "WETH")
 
 echo "==> Deploying OracleMock (price 2000e36)"
-ORACLE=$(deploy test/mocks/OracleMock.sol:OracleMock --constructor-args 2000000000000000000000000000000000000)
+ORACLE=$(deploy test/mocks/OracleMock.sol:OracleMock --constructor-args 2000000000000000000000000000000000000000)
 
 echo "==> Minting starter balances"
 cast send "$DAI" "mint(address,uint256)" "$MAKER_ADDRESS" 100000000000000000000000 \
