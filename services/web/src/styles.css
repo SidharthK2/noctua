@@ -1,262 +1,86 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Dark-only theme — semantic tokens consumed by the shadcn-style components in
+   src/components/ui. No light mode, no theme toggle. */
 :root {
   color-scheme: dark;
-  --bg: #0f1115;
-  --panel: #171a21;
-  --border: #2a2f3a;
-  --text: #e6e8ee;
-  --muted: #8b91a1;
-  --accent: #6ea8ff;
-  --good: #4fd18b;
-  --bad: #ff6b6b;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --background: #09090b; /* zinc-950 */
+  --foreground: #f4f4f5; /* zinc-100 */
+  --card: #18181b; /* zinc-900 */
+  --card-foreground: #f4f4f5; /* zinc-100 */
+  --popover: #18181b; /* zinc-900 */
+  --popover-foreground: #f4f4f5; /* zinc-100 */
+  --primary: #10b981; /* emerald-500 */
+  --primary-foreground: #09090b; /* zinc-950 */
+  --secondary: #27272a; /* zinc-800 */
+  --secondary-foreground: #f4f4f5; /* zinc-100 */
+  --muted: #27272a; /* zinc-800 */
+  --muted-foreground: #a1a1aa; /* zinc-400 */
+  --accent: #27272a; /* zinc-800 */
+  --accent-foreground: #f4f4f5; /* zinc-100 */
+  --destructive: #f87171; /* red-400 */
+  --border: #27272a; /* zinc-800 */
+  --input: #27272a; /* zinc-800 */
+  --ring: rgb(16 185 129 / 0.4); /* emerald-500/40 */
+  --radius: 0.625rem;
 }
 
-* {
-  box-sizing: border-box;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
 }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-}
-
-.app {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
-
-.banner {
-  background: #3a2a12;
-  border-bottom: 1px solid #6b4a1a;
-  padding: 0.75rem 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.85rem;
-}
-
-.banner strong {
-  color: #ffcf7a;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: 0.75rem;
-}
-
-.panels {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  padding: 1.5rem;
-}
-
-@media (max-width: 900px) {
-  .panels {
-    grid-template-columns: 1fr;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
-}
-
-.panel {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  min-width: 0;
-}
-
-.panel h2 {
-  font-size: 0.95rem;
-  font-weight: 600;
-  margin: 0;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  color: var(--accent);
-  word-break: break-all;
-}
-
-.rfq-form,
-.quote-form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 0.75rem;
-  background: #12141a;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.75rem;
-}
-
-.rfq-form label,
-.quote-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
-.checkbox-label.checkbox-label {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-input[type="text"],
-input:not([type]) {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-}
-
-input {
-  background: #0d0f14;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
-  padding: 0.4rem 0.5rem;
-  font-size: 0.9rem;
-  width: 8rem;
-}
-
-button {
-  background: var(--accent);
-  border: none;
-  border-radius: 4px;
-  color: #0f1115;
-  font-weight: 600;
-  padding: 0.45rem 0.9rem;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.quote-form-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.rfq-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  overflow-y: auto;
-}
-
-.rfq-card {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.85rem;
-}
-
-.rfq-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.badge {
-  font-family: -apple-system, sans-serif;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  padding: 0.15rem 0.5rem;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  color: var(--muted);
-}
-
-.badge-open {
-  color: var(--good);
-  border-color: var(--good);
-}
-
-.badge-filled {
-  color: var(--muted);
-}
-
-.badge-withdrawn {
-  color: var(--muted);
-}
-
-.quote-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.quote-table th,
-.quote-table td {
-  text-align: left;
-  padding: 0.3rem 0.4rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.quote-table th {
-  color: var(--muted);
-  font-family: -apple-system, sans-serif;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-}
-
-.loan-status {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.status-strip {
-  border-top: 1px solid var(--border);
-  background: var(--panel);
-  padding: 0.75rem 1.5rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.8rem;
-}
-
-.balances {
-  display: flex;
-  gap: 1.5rem;
-}
-
-.balances > div {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.balances .label {
-  font-family: -apple-system, sans-serif;
-  color: var(--muted);
-  font-size: 0.7rem;
-  text-transform: uppercase;
-}
-
-.event-tx {
-  color: var(--accent);
-}
-
-.event-info {
-  color: var(--good);
-}
-
-.event-error {
-  color: var(--bad);
+  body {
+    @apply text-foreground font-sans;
+    margin: 0;
+    /* flat zinc-950 with a barely-there emerald glow at the top — depth without gradients shouting */
+    background:
+      radial-gradient(1100px 380px at 50% -12%, rgb(16 185 129 / 0.05), transparent 70%),
+      var(--background);
+    background-attachment: fixed;
+  }
+  ::selection {
+    background: rgb(16 185 129 / 0.25);
+  }
+  /* Tailwind v4 preflight leaves buttons with the default cursor; restore pointer affordance. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #3f3f46 transparent;
+  }
 }

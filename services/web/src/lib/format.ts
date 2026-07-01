@@ -20,9 +20,15 @@ export function formatAprPct(aprWad: bigint): string {
   return `${negative ? "-" : ""}${whole.toString()}.${frac}%`
 }
 
-/** Parses a human decimal string (e.g. "10000.5") into an 18-decimal bigint. */
+/** Like formatUnits18, but with thousands separators for display (e.g. "10,000.00"). */
+export function formatAmount(value: bigint): string {
+  const [whole, frac] = formatUnits18(value).split(".")
+  return `${BigInt(whole).toLocaleString("en-US")}.${frac}`
+}
+
+/** Parses a human decimal string (e.g. "10000.5" or "10,000.5") into an 18-decimal bigint. */
 export function parseUnits18(input: string): bigint {
-  const trimmed = input.trim()
+  const trimmed = input.trim().replace(/,/g, "")
   if (!/^\d+(\.\d+)?$/.test(trimmed)) throw new Error(`invalid amount: ${input}`)
   const [whole, frac = ""] = trimmed.split(".")
   const paddedFrac = frac.padEnd(18, "0").slice(0, 18)
