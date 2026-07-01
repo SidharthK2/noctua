@@ -167,6 +167,17 @@ assert((await bal(COLL, borrower.address)) === borrowerCollBefore, "repay: colla
 loan = await pub.readContract({ address: NOCTUA, abi: noctuaAbi, functionName: "loans", args: [quoteHash] })
 assert(loan[1] === 2, "loan status Repaid")
 
+// the watcher observes the Repaid event and flips the RFQ's loanStatus itself — no client call.
+const repayDeadline = Date.now() + 10_000
+let watchedAfterRepay
+while (Date.now() < repayDeadline) {
+  watchedAfterRepay = await api("GET", `/rfqs/${rfq.id}`)
+  if (watchedAfterRepay.loanStatus === "repaid") break
+  await new Promise((r) => setTimeout(r, 300))
+}
+assert(watchedAfterRepay?.loanStatus === "repaid", "watcher observed Repaid and set loanStatus")
+assert(!!watchedAfterRepay.loanTxHash, "RFQ records the repay transaction hash")
+
 // 7. maker cancels a second, unfilled quote on-chain; the watcher should observe the
 // Cancelled event and remove it from the RFQ's quote listing.
 const now2 = (await pub.getBlock()).timestamp

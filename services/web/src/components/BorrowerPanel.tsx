@@ -1,9 +1,9 @@
-import { hashQuote, impliedAprWad } from "@noctua/shared"
+import { impliedAprWad } from "@noctua/shared"
 import { useEffect, useState } from "react"
 import type { QuoteWire, RfqWire } from "../api.js"
 import { createRfq, getRfq, listRfqs } from "../api.js"
-import { COLLATERAL_ASSET_ADDRESS, CHAIN_ID, LOAN_ASSET_ADDRESS, NOCTUA_ADDRESS } from "../lib/addresses.js"
-import { erc20Abi, LOAN_STATUS, noctuaAbi } from "../lib/abi.js"
+import { COLLATERAL_ASSET_ADDRESS, LOAN_ASSET_ADDRESS, NOCTUA_ADDRESS } from "../lib/addresses.js"
+import { erc20Abi, noctuaAbi } from "../lib/abi.js"
 import { borrowerAccount, borrowerWallet, publicClient } from "../lib/clients.js"
 import { formatAprPct, formatCountdown, formatUnits18, parseUnits18 } from "../lib/format.js"
 import { wireQuoteToOnchain } from "../lib/quote.js"
@@ -11,13 +11,19 @@ import type { StatusEvent } from "../lib/status.js"
 
 type RfqDetail = RfqWire & { quotes: QuoteWire[] }
 
+const LOAN_STATUS_LABEL = {
+  active: "Active",
+  repaid: "Repaid",
+  liquidated: "Liquidated",
+  defaulted: "Defaulted",
+} as const
+
 export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => void }) {
   const [principalInput, setPrincipalInput] = useState("10000")
   const [collateralInput, setCollateralInput] = useState("10")
   const [daysInput, setDaysInput] = useState("90")
   const [myRfqs, setMyRfqs] = useState<RfqDetail[]>([])
   const [acceptedByRfqId, setAcceptedByRfqId] = useState<Record<string, QuoteWire>>({})
-  const [loanStatusByRfqId, setLoanStatusByRfqId] = useState<Record<string, number>>({})
   const [busyId, setBusyId] = useState<string | null>(null)
   const [nowSec, setNowSec] = useState(() => BigInt(Math.floor(Date.now() / 1000)))
 
@@ -53,34 +59,6 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
     }
     return undefined
   }
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: onStatus identity churns every render
-  useEffect(() => {
-    const entries = myRfqs
-      .map((detail) => [detail.id, acceptedQuoteFor(detail)] as const)
-      .filter((entry): entry is readonly [string, QuoteWire] => entry[1] !== undefined)
-    if (entries.length === 0) return
-    const poll = async () => {
-      const updates: Record<string, number> = {}
-      for (const [rfqId, quoteWire] of entries) {
-        const onchain = wireQuoteToOnchain(quoteWire.quote)
-        const digest = hashQuote(onchain, CHAIN_ID, NOCTUA_ADDRESS)
-        const [, status] = await publicClient.readContract({
-          address: NOCTUA_ADDRESS,
-          abi: noctuaAbi,
-          functionName: "loans",
-          args: [digest],
-        })
-        updates[rfqId] = status
-      }
-      setLoanStatusByRfqId((prev) => ({ ...prev, ...updates }))
-    }
-    poll().catch((err) => onStatus({ kind: "error", label: "poll loan status", message: (err as Error).message }))
-    const id = setInterval(() => {
-      poll().catch((err) => onStatus({ kind: "error", label: "poll loan status", message: (err as Error).message }))
-    }, 3000)
-    return () => clearInterval(id)
-  }, [acceptedByRfqId, myRfqs])
 
   async function postRfq(e: React.FormEvent) {
     e.preventDefault()
@@ -139,7 +117,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
     }
   }
 
-  async function repay(rfqId: string, quoteWire: QuoteWire) {
+  async function repay(_rfqId: string, quoteWire: QuoteWire) {
     setBusyId(`repay-${quoteWire.digest}`)
     try {
       const onchain = wireQuoteToOnchain(quoteWire.quote)
@@ -161,7 +139,10 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
       })
       await publicClient.waitForTransactionReceipt({ hash: repayHash })
       onStatus({ kind: "tx", label: "repaid loan", hash: repayHash })
-      setLoanStatusByRfqId((prev) => ({ ...prev, [rfqId]: 2 }))
+
+      // The chain watcher observes the on-chain Repaid event and flips loanStatus itself;
+      // the RFQ refresh poll will pick up the change within a poll or two.
+      await refresh()
     } catch (err) {
       onStatus({ kind: "error", label: "repay failed", message: (err as Error).message })
     } finally {
@@ -195,7 +176,6 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
         {myRfqs.length === 0 && <p className="muted">No RFQs posted yet.</p>}
         {myRfqs.map((detail) => {
           const accepted = acceptedQuoteFor(detail)
-          const loanStatus = loanStatusByRfqId[detail.id]
           return (
             <div className="rfq-card" key={detail.id}>
               <div className="rfq-card-header">
@@ -207,15 +187,23 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
 
               {accepted && (
                 <div className="loan-status">
-                  Loan status: <strong>{LOAN_STATUS[loanStatus ?? 0]}</strong>
-                  {(loanStatus ?? 0) === 1 && (
-                    <button
-                      type="button"
-                      disabled={busyId === `repay-${accepted.digest}`}
-                      onClick={() => repay(detail.id, accepted)}
-                    >
-                      Repay {formatUnits18(BigInt(accepted.quote.repayment))} DAI
-                    </button>
+                  {detail.loanStatus === null ? (
+                    <>Loan status: pending confirmation…</>
+                  ) : detail.loanStatus === "active" ? (
+                    <>
+                      Loan status: <strong>Active</strong>
+                      <button
+                        type="button"
+                        disabled={busyId === `repay-${accepted.digest}`}
+                        onClick={() => repay(detail.id, accepted)}
+                      >
+                        Repay {formatUnits18(BigInt(accepted.quote.repayment))} DAI
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      Loan status: <strong>{LOAN_STATUS_LABEL[detail.loanStatus]}</strong>
+                    </>
                   )}
                 </div>
               )}

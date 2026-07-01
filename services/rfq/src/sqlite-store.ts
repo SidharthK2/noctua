@@ -1,7 +1,7 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite"
 import type { Quote } from "@noctua/shared"
 import type { Address, Hex } from "viem"
-import type { Rfq, RfqStatus, RfqStore, StoredQuote } from "./store.js"
+import type { LoanStatus, Rfq, RfqStatus, RfqStore, StoredQuote } from "./store.js"
 
 type RfqRow = {
   id: string
@@ -15,6 +15,8 @@ type RfqRow = {
   created_at: number
   filled_by: string | null
   fill_tx_hash: string | null
+  loan_status: string | null
+  loan_tx_hash: string | null
 }
 
 type QuoteRow = {
@@ -49,6 +51,8 @@ function rowToRfq(row: RfqRow): Rfq {
     createdAt: row.created_at,
     filledBy: (row.filled_by as Hex | null) ?? null,
     fillTxHash: (row.fill_tx_hash as Hex | null) ?? null,
+    loanStatus: (row.loan_status as LoanStatus | null) ?? null,
+    loanTxHash: (row.loan_tx_hash as Hex | null) ?? null,
   }
 }
 
@@ -85,6 +89,7 @@ export class SqliteRfqStore implements RfqStore {
   private readonly listRfqsByStatusStmt: StatementSync
   private readonly withdrawRfqStmt: StatementSync
   private readonly markFilledStmt: StatementSync
+  private readonly setLoanStatusStmt: StatementSync
   private readonly hasQuoteStmt: StatementSync
   private readonly insertQuoteStmt: StatementSync
   private readonly listQuotesForRfqStmt: StatementSync
@@ -97,6 +102,9 @@ export class SqliteRfqStore implements RfqStore {
   constructor(dbPath: string) {
     this.db = new DatabaseSync(dbPath)
 
+    // Note: nullable columns added for the loan lifecycle (loan_status, loan_tx_hash) rely on
+    // CREATE TABLE IF NOT EXISTS only — there's no migration path for pre-existing demo DBs.
+    // Demo dbs are disposable; delete the sqlite file if upgrading an existing deployment.
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS rfqs (
         id TEXT PRIMARY KEY,
@@ -109,7 +117,9 @@ export class SqliteRfqStore implements RfqStore {
         status TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         filled_by TEXT,
-        fill_tx_hash TEXT
+        fill_tx_hash TEXT,
+        loan_status TEXT,
+        loan_tx_hash TEXT
       )
     `)
 
@@ -142,8 +152,8 @@ export class SqliteRfqStore implements RfqStore {
     `)
 
     this.insertRfqStmt = this.db.prepare(`
-      INSERT INTO rfqs (id, borrower, loan_asset, collateral_asset, principal, collateral, maturity, status, created_at, filled_by, fill_tx_hash)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO rfqs (id, borrower, loan_asset, collateral_asset, principal, collateral, maturity, status, created_at, filled_by, fill_tx_hash, loan_status, loan_tx_hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     this.getRfqStmt = this.db.prepare(`SELECT * FROM rfqs WHERE id = ?`)
     this.listRfqsStmt = this.db.prepare(`SELECT * FROM rfqs`)
@@ -152,7 +162,10 @@ export class SqliteRfqStore implements RfqStore {
       `UPDATE rfqs SET status = 'withdrawn' WHERE id = ? AND status = 'open'`,
     )
     this.markFilledStmt = this.db.prepare(
-      `UPDATE rfqs SET status = 'filled', filled_by = ?, fill_tx_hash = ? WHERE id = ? AND status = 'open'`,
+      `UPDATE rfqs SET status = 'filled', filled_by = ?, fill_tx_hash = ?, loan_status = 'active', loan_tx_hash = ? WHERE id = ? AND status = 'open'`,
+    )
+    this.setLoanStatusStmt = this.db.prepare(
+      `UPDATE rfqs SET loan_status = ?, loan_tx_hash = ? WHERE filled_by = ? AND status = 'filled'`,
     )
     this.hasQuoteStmt = this.db.prepare(`SELECT 1 FROM quotes WHERE digest = ?`)
     this.insertQuoteStmt = this.db.prepare(`
@@ -173,7 +186,12 @@ export class SqliteRfqStore implements RfqStore {
     `)
   }
 
-  createRfq(input: Omit<Rfq, "id" | "status" | "createdAt" | "filledBy" | "fillTxHash">): Rfq {
+  createRfq(
+    input: Omit<
+      Rfq,
+      "id" | "status" | "createdAt" | "filledBy" | "fillTxHash" | "loanStatus" | "loanTxHash"
+    >,
+  ): Rfq {
     const rfq: Rfq = {
       ...input,
       id: crypto.randomUUID(),
@@ -181,6 +199,8 @@ export class SqliteRfqStore implements RfqStore {
       createdAt: Date.now(),
       filledBy: null,
       fillTxHash: null,
+      loanStatus: null,
+      loanTxHash: null,
     }
     this.insertRfqStmt.run(
       rfq.id,
@@ -194,6 +214,8 @@ export class SqliteRfqStore implements RfqStore {
       rfq.createdAt,
       rfq.filledBy,
       rfq.fillTxHash,
+      rfq.loanStatus,
+      rfq.loanTxHash,
     )
     return rfq
   }
@@ -265,7 +287,11 @@ export class SqliteRfqStore implements RfqStore {
   markRfqFilled(quoteDigest: Hex, txHash: Hex): void {
     const quoteRow = this.getQuoteByDigestStmt.get(quoteDigest) as QuoteRow | undefined
     if (!quoteRow) return
-    this.markFilledStmt.run(quoteDigest, txHash, quoteRow.rfq_id)
+    this.markFilledStmt.run(quoteDigest, txHash, txHash, quoteRow.rfq_id)
+  }
+
+  setLoanStatus(quoteDigest: Hex, status: "repaid" | "liquidated" | "defaulted", txHash: Hex): void {
+    this.setLoanStatusStmt.run(status, txHash, quoteDigest)
   }
 
   removeQuoteByDigest(digest: Hex): void {

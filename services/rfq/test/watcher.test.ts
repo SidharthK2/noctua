@@ -109,6 +109,154 @@ describe.each(storeFactories)("ChainWatcher (%s)", (_name, makeStore) => {
     expect(updated?.fillTxHash).toBe(txFor(1))
   })
 
+  it("Repaid event marks the filled RFQ's loanStatus repaid and records the tx hash", async () => {
+    const rfq = store.createRfq(baseRfq())
+    const digest = digestFor(10)
+    store.addQuote({ digest, rfqId: rfq.id, quote: baseQuote(), signature: "0xabcd", createdAt: 0 })
+    store.markRfqFilled(digest, txFor(10))
+
+    const client = makeStubClient({
+      blockNumber: 10n,
+      logsByRange: () => [
+        {
+          eventName: "Repaid",
+          args: { quoteHash: digest, payer: BORROWER },
+          blockNumber: 5n,
+          logIndex: 0,
+          transactionHash: txFor(11),
+        },
+      ],
+    })
+    const watcher = new ChainWatcher(client, NOCTUA_ADDRESS, store, {
+      pollIntervalMs: 1000,
+      confirmations: 0,
+      startBlock: 0,
+    })
+
+    await watcher.poll()
+
+    const updated = store.getRfq(rfq.id)
+    expect(updated?.loanStatus).toBe("repaid")
+    expect(updated?.loanTxHash).toBe(txFor(11))
+  })
+
+  it("Liquidated event marks the filled RFQ's loanStatus liquidated and records the tx hash", async () => {
+    const rfq = store.createRfq(baseRfq())
+    const digest = digestFor(12)
+    store.addQuote({ digest, rfqId: rfq.id, quote: baseQuote(), signature: "0xabcd", createdAt: 0 })
+    store.markRfqFilled(digest, txFor(12))
+
+    const client = makeStubClient({
+      blockNumber: 10n,
+      logsByRange: () => [
+        {
+          eventName: "Liquidated",
+          args: { quoteHash: digest, liquidator: MAKER },
+          blockNumber: 5n,
+          logIndex: 0,
+          transactionHash: txFor(13),
+        },
+      ],
+    })
+    const watcher = new ChainWatcher(client, NOCTUA_ADDRESS, store, {
+      pollIntervalMs: 1000,
+      confirmations: 0,
+      startBlock: 0,
+    })
+
+    await watcher.poll()
+
+    const updated = store.getRfq(rfq.id)
+    expect(updated?.loanStatus).toBe("liquidated")
+    expect(updated?.loanTxHash).toBe(txFor(13))
+  })
+
+  it("Defaulted event marks the filled RFQ's loanStatus defaulted and records the tx hash", async () => {
+    const rfq = store.createRfq(baseRfq())
+    const digest = digestFor(14)
+    store.addQuote({ digest, rfqId: rfq.id, quote: baseQuote(), signature: "0xabcd", createdAt: 0 })
+    store.markRfqFilled(digest, txFor(14))
+
+    const client = makeStubClient({
+      blockNumber: 10n,
+      logsByRange: () => [
+        {
+          eventName: "Defaulted",
+          args: { quoteHash: digest },
+          blockNumber: 5n,
+          logIndex: 0,
+          transactionHash: txFor(15),
+        },
+      ],
+    })
+    const watcher = new ChainWatcher(client, NOCTUA_ADDRESS, store, {
+      pollIntervalMs: 1000,
+      confirmations: 0,
+      startBlock: 0,
+    })
+
+    await watcher.poll()
+
+    const updated = store.getRfq(rfq.id)
+    expect(updated?.loanStatus).toBe("defaulted")
+    expect(updated?.loanTxHash).toBe(txFor(15))
+  })
+
+  it("setLoanStatus is a no-op for an unknown digest", () => {
+    const unknownDigest = digestFor(999)
+    expect(() => store.setLoanStatus(unknownDigest, "repaid", txFor(20))).not.toThrow()
+  })
+
+  it("setLoanStatus is a no-op for an RFQ that was never filled", () => {
+    const rfq = store.createRfq(baseRfq())
+    const digest = digestFor(16)
+    store.addQuote({ digest, rfqId: rfq.id, quote: baseQuote(), signature: "0xabcd", createdAt: 0 })
+    // Quote exists but the RFQ was never filled (no filledBy set), so this must be a no-op.
+    store.setLoanStatus(digest, "repaid", txFor(21))
+
+    const updated = store.getRfq(rfq.id)
+    expect(updated?.loanStatus).toBeNull()
+    expect(updated?.loanTxHash).toBeNull()
+  })
+
+  it("Filled + Repaid in the same poll batch apply in (blockNumber, logIndex) order", async () => {
+    const rfq = store.createRfq(baseRfq())
+    const digest = digestFor(17)
+    store.addQuote({ digest, rfqId: rfq.id, quote: baseQuote(), signature: "0xabcd", createdAt: 0 })
+
+    const client = makeStubClient({
+      blockNumber: 10n,
+      logsByRange: () => [
+        {
+          eventName: "Filled",
+          args: { quoteHash: digest, maker: MAKER, borrower: BORROWER },
+          blockNumber: 5n,
+          logIndex: 0,
+          transactionHash: txFor(17),
+        },
+        {
+          eventName: "Repaid",
+          args: { quoteHash: digest, payer: BORROWER },
+          blockNumber: 5n,
+          logIndex: 1,
+          transactionHash: txFor(18),
+        },
+      ],
+    })
+    const watcher = new ChainWatcher(client, NOCTUA_ADDRESS, store, {
+      pollIntervalMs: 1000,
+      confirmations: 0,
+      startBlock: 0,
+    })
+
+    await watcher.poll()
+
+    const updated = store.getRfq(rfq.id)
+    expect(updated?.status).toBe("filled")
+    expect(updated?.loanStatus).toBe("repaid")
+    expect(updated?.loanTxHash).toBe(txFor(18))
+  })
+
   it("Cancelled event removes the stored quote", async () => {
     const rfq = store.createRfq(baseRfq())
     const digest = digestFor(2)

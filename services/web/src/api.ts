@@ -13,6 +13,8 @@ export type RfqWire = {
   createdAt: number
   filledBy: Hex | null
   fillTxHash: Hex | null
+  loanStatus: "active" | "repaid" | "liquidated" | "defaulted" | null
+  loanTxHash: Hex | null
 }
 
 /** Quote shape as returned by the service — bigint fields are decimal strings on the wire. */

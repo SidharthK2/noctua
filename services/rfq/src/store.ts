@@ -3,6 +3,8 @@ import type { Address, Hex } from "viem"
 
 export type RfqStatus = "open" | "filled" | "withdrawn"
 
+export type LoanStatus = "active" | "repaid" | "liquidated" | "defaulted"
+
 export type Rfq = {
   id: string
   borrower: Address
@@ -15,6 +17,10 @@ export type Rfq = {
   createdAt: number
   filledBy: Hex | null
   fillTxHash: Hex | null
+  /** Mirrors the on-chain loan lifecycle once filled; null until the watcher observes a Filled log. */
+  loanStatus: LoanStatus | null
+  /** Tx hash of the last event that changed loanStatus (Filled/Repaid/Liquidated/Defaulted). */
+  loanTxHash: Hex | null
 }
 
 export type StoredQuote = {
@@ -27,7 +33,12 @@ export type StoredQuote = {
 
 /** Storage contract for RFQs and their quotes. */
 export interface RfqStore {
-  createRfq(input: Omit<Rfq, "id" | "status" | "createdAt" | "filledBy" | "fillTxHash">): Rfq
+  createRfq(
+    input: Omit<
+      Rfq,
+      "id" | "status" | "createdAt" | "filledBy" | "fillTxHash" | "loanStatus" | "loanTxHash"
+    >,
+  ): Rfq
   getRfq(id: string): Rfq | undefined
   listRfqs(status?: RfqStatus): Rfq[]
   /** Withdraws an RFQ (borrower-initiated). Only valid from "open". */
@@ -42,6 +53,11 @@ export interface RfqStore {
   setCursor(block: bigint): void
   /** Marks the RFQ backing `quoteDigest` as filled, if it exists and is open. Idempotent. */
   markRfqFilled(quoteDigest: Hex, txHash: Hex): void
+  /**
+   * Updates the loan lifecycle status of the RFQ backing `quoteDigest`. No-op if no RFQ was
+   * filled by that digest (unknown digest or the RFQ was never filled).
+   */
+  setLoanStatus(quoteDigest: Hex, status: "repaid" | "liquidated" | "defaulted", txHash: Hex): void
   /** Removes a stored quote by digest (e.g. on-chain cancellation). */
   removeQuoteByDigest(digest: Hex): void
   /** Removes stored quotes from `maker` signed at a nonce below `currentNonce`. */
@@ -54,7 +70,12 @@ export class MemoryRfqStore implements RfqStore {
   private readonly quotesByDigest = new Map<Hex, StoredQuote>()
   private cursor: bigint | undefined
 
-  createRfq(input: Omit<Rfq, "id" | "status" | "createdAt" | "filledBy" | "fillTxHash">): Rfq {
+  createRfq(
+    input: Omit<
+      Rfq,
+      "id" | "status" | "createdAt" | "filledBy" | "fillTxHash" | "loanStatus" | "loanTxHash"
+    >,
+  ): Rfq {
     const rfq: Rfq = {
       ...input,
       id: crypto.randomUUID(),
@@ -62,6 +83,8 @@ export class MemoryRfqStore implements RfqStore {
       createdAt: Date.now(),
       filledBy: null,
       fillTxHash: null,
+      loanStatus: null,
+      loanTxHash: null,
     }
     this.rfqs.set(rfq.id, rfq)
     return rfq
@@ -116,6 +139,15 @@ export class MemoryRfqStore implements RfqStore {
     rfq.status = "filled"
     rfq.filledBy = quoteDigest
     rfq.fillTxHash = txHash
+    rfq.loanStatus = "active"
+    rfq.loanTxHash = txHash
+  }
+
+  setLoanStatus(quoteDigest: Hex, status: "repaid" | "liquidated" | "defaulted", txHash: Hex): void {
+    const rfq = [...this.rfqs.values()].find((r) => r.filledBy === quoteDigest)
+    if (rfq?.status !== "filled") return
+    rfq.loanStatus = status
+    rfq.loanTxHash = txHash
   }
 
   removeQuoteByDigest(digest: Hex): void {
