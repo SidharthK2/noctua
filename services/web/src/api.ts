@@ -13,7 +13,7 @@ export type RfqWire = {
   createdAt: number
   filledBy: Hex | null
   fillTxHash: Hex | null
-  loanStatus: "active" | "repaid" | "liquidated" | "defaulted" | null
+  loanStatus: "active" | "repaid" | "defaulted" | null
   loanTxHash: Hex | null
 }
 
@@ -26,11 +26,9 @@ export type QuoteWire = {
     taker: Address
     loanAsset: Address
     collateralAsset: Address
-    oracle: Address
     principal: string
     repayment: string
     collateral: string
-    lltv: string
     maturity: string
     expiry: string
     nonce: string
@@ -92,11 +90,9 @@ export function submitQuote(
     taker: Address
     loanAsset: Address
     collateralAsset: Address
-    oracle: Address
     principal: bigint
     repayment: bigint
     collateral: bigint
-    lltv: bigint
     maturity: bigint
     expiry: bigint
     nonce: bigint
@@ -108,11 +104,9 @@ export function submitQuote(
     taker: input.taker,
     loanAsset: input.loanAsset,
     collateralAsset: input.collateralAsset,
-    oracle: input.oracle,
     principal: input.principal.toString(),
     repayment: input.repayment.toString(),
     collateral: input.collateral.toString(),
-    lltv: input.lltv.toString(),
     maturity: input.maturity.toString(),
     expiry: input.expiry.toString(),
     nonce: input.nonce.toString(),

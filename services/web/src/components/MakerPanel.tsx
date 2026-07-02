@@ -2,7 +2,13 @@ import { Inbox, Loader2 } from "lucide-react"
 import { useState } from "react"
 import { useAccount } from "wagmi"
 import type { RfqWire } from "../api.js"
-import { formatAmount, formatCountdown, formatUnits18 } from "../lib/format.js"
+import {
+  COLLATERAL_DECIMALS,
+  COLLATERAL_SYMBOL,
+  LOAN_DECIMALS,
+  LOAN_SYMBOL,
+} from "../lib/addresses.js"
+import { formatAmount, formatCountdown, formatUnits } from "../lib/format.js"
 import { useOpenRfqs, useSendQuoteMutation } from "../lib/queries.js"
 import type { StatusEvent } from "../lib/status.js"
 import { useNowSeconds } from "../lib/use-now-seconds.js"
@@ -15,7 +21,6 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
   const [quotingId, setQuotingId] = useState<string | null>(null)
   const [repaymentInput, setRepaymentInput] = useState("")
   const [expiryMinutesInput, setExpiryMinutesInput] = useState("60")
-  const [oracleOn, setOracleOn] = useState(true)
   const nowSec = useNowSeconds()
   const { address, isConnected } = useAccount()
 
@@ -25,14 +30,13 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
   function startQuote(rfq: RfqWire) {
     setQuotingId(rfq.id)
     const defaultRepayment = (BigInt(rfq.principal) * 104n) / 100n
-    setRepaymentInput(formatUnits18(defaultRepayment))
+    setRepaymentInput(formatUnits(defaultRepayment, LOAN_DECIMALS))
     setExpiryMinutesInput("60")
-    setOracleOn(true)
   }
 
   function onSendQuote(rfq: RfqWire) {
     sendQuote.mutate(
-      { rfq, repaymentInput, expiryMinutesInput, oracleOn },
+      { rfq, repaymentInput, expiryMinutesInput },
       { onSuccess: () => setQuotingId(null) },
     )
   }
@@ -85,14 +89,14 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
               <div className="flex items-center justify-between gap-2">
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                   <span className="font-mono text-base tabular-nums text-zinc-100">
-                    {formatAmount(BigInt(rfq.principal))}
+                    {formatAmount(BigInt(rfq.principal), LOAN_DECIMALS)}
                   </span>
-                  <span className="text-xs text-zinc-500">DAI</span>
+                  <span className="text-xs text-zinc-500">{LOAN_SYMBOL}</span>
                   <span className="text-zinc-700">·</span>
                   <span className="font-mono text-sm tabular-nums text-zinc-400">
-                    {formatAmount(BigInt(rfq.collateral))}
+                    {formatAmount(BigInt(rfq.collateral), COLLATERAL_DECIMALS)}
                   </span>
-                  <span className="text-xs text-zinc-500">WETH collateral</span>
+                  <span className="text-xs text-zinc-500">{COLLATERAL_SYMBOL} collateral</span>
                   <span className="text-zinc-700">·</span>
                   <span className="text-xs tabular-nums text-zinc-500">
                     {formatCountdown(BigInt(rfq.maturity), nowSec)} term
@@ -119,7 +123,7 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
                     className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-zinc-500"
                     htmlFor={`quote-repayment-${rfq.id}`}
                   >
-                    Repayment · DAI
+                    Repayment · {LOAN_SYMBOL}
                     <Input
                       id={`quote-repayment-${rfq.id}`}
                       className="w-32 text-right font-mono tabular-nums"
@@ -138,15 +142,6 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
                       value={expiryMinutesInput}
                       onChange={(e) => setExpiryMinutesInput(e.target.value)}
                     />
-                  </label>
-                  <label className="flex h-9 flex-row items-center gap-2 text-xs text-zinc-400">
-                    <input
-                      type="checkbox"
-                      checked={oracleOn}
-                      onChange={(e) => setOracleOn(e.target.checked)}
-                      className="size-4 rounded border-zinc-800 bg-zinc-900 accent-emerald-500"
-                    />
-                    Oracle-backed · lltv 0.8
                   </label>
                   <div className="flex gap-2">
                     <Button

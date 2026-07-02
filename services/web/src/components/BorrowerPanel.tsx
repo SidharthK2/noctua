@@ -3,6 +3,12 @@ import { ChevronDown, ChevronRight, Loader2, MoonStar } from "lucide-react"
 import { useState } from "react"
 import { useAccount } from "wagmi"
 import type { QuoteWire } from "../api.js"
+import {
+  COLLATERAL_DECIMALS,
+  COLLATERAL_SYMBOL,
+  LOAN_DECIMALS,
+  LOAN_SYMBOL,
+} from "../lib/addresses.js"
 import { formatAmount, formatAprPct, formatCountdown } from "../lib/format.js"
 import type { RfqDetail } from "../lib/queries.js"
 import {
@@ -36,14 +42,14 @@ function AmountLine({
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
       <span className="font-mono text-base tabular-nums text-zinc-100">
-        {formatAmount(principal)}
+        {formatAmount(principal, LOAN_DECIMALS)}
       </span>
-      <span className="text-xs text-zinc-500">DAI</span>
+      <span className="text-xs text-zinc-500">{LOAN_SYMBOL}</span>
       <span className="text-zinc-700">·</span>
       <span className="font-mono text-sm tabular-nums text-zinc-400">
-        {formatAmount(collateral)}
+        {formatAmount(collateral, COLLATERAL_DECIMALS)}
       </span>
-      <span className="text-xs text-zinc-500">WETH collateral</span>
+      <span className="text-xs text-zinc-500">{COLLATERAL_SYMBOL} collateral</span>
       <span className="text-zinc-700">·</span>
       <span className="text-xs tabular-nums text-zinc-500">
         matures in {formatCountdown(maturity, nowSec)}
@@ -54,7 +60,6 @@ function AmountLine({
 
 const LOAN_STATUS_TEXT = {
   repaid: "Loan repaid — collateral returned.",
-  liquidated: "Position was liquidated.",
   defaulted: "Loan defaulted — collateral forfeited.",
 } as const
 
@@ -191,7 +196,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
                 <span className="flex-1 text-zinc-500">
                   Owes{" "}
                   <span className="font-mono tabular-nums text-zinc-300">
-                    {formatAmount(BigInt(accepted.quote.repayment))} DAI
+                    {formatAmount(BigInt(accepted.quote.repayment), LOAN_DECIMALS)} {LOAN_SYMBOL}
                   </span>{" "}
                   by maturity
                 </span>
@@ -252,7 +257,8 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
                     className="border-zinc-800/50 transition-colors hover:bg-zinc-800/20"
                   >
                     <TableCell className="text-right font-mono tabular-nums text-zinc-200">
-                      {formatAmount(onchain.repayment)} <span className="text-zinc-500">DAI</span>
+                      {formatAmount(onchain.repayment, LOAN_DECIMALS)}{" "}
+                      <span className="text-zinc-500">{LOAN_SYMBOL}</span>
                     </TableCell>
                     <TableCell className="text-right font-mono font-medium tabular-nums text-emerald-400">
                       {apr}
@@ -313,7 +319,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
             className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-zinc-500"
             htmlFor="rfq-principal"
           >
-            Principal · DAI
+            Principal · {LOAN_SYMBOL}
             <Input
               id="rfq-principal"
               className="w-32 text-right font-mono tabular-nums"
@@ -325,7 +331,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
             className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-zinc-500"
             htmlFor="rfq-collateral"
           >
-            Collateral · WETH
+            Collateral · {COLLATERAL_SYMBOL}
             <Input
               id="rfq-collateral"
               className="w-32 text-right font-mono tabular-nums"

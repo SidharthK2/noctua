@@ -1,3 +1,9 @@
+import {
+  COLLATERAL_DECIMALS,
+  COLLATERAL_SYMBOL,
+  LOAN_DECIMALS,
+  LOAN_SYMBOL,
+} from "../lib/addresses.js"
 import { formatAmount, shortAddr } from "../lib/format.js"
 import type { Balances } from "../lib/queries.js"
 import { useBalances } from "../lib/queries.js"
@@ -26,8 +32,14 @@ function StatGroup({
       <span className="text-[0.6rem] font-medium uppercase tracking-widest text-zinc-500">
         {label}
       </span>
-      <Stat label="DAI" value={loan === undefined ? "—" : formatAmount(loan)} />
-      <Stat label="WETH" value={coll === undefined ? "—" : formatAmount(coll)} />
+      <Stat
+        label={LOAN_SYMBOL}
+        value={loan === undefined ? "—" : formatAmount(loan, LOAN_DECIMALS)}
+      />
+      <Stat
+        label={COLLATERAL_SYMBOL}
+        value={coll === undefined ? "—" : formatAmount(coll, COLLATERAL_DECIMALS)}
+      />
     </div>
   )
 }

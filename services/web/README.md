@@ -7,7 +7,7 @@ address and lets it accept quotes / repay loans. Wallet connection is injected-o
 Coinbase Wallet extension, etc.) via `wagmi` — no WalletConnect, no RainbowKit.
 
 Defaults to **Base Sepolia** (chain id `84532`); also supports a local anvil chain (`31337`) for
-fully offline development. Both the active chain and the four contract addresses are
+fully offline development. Both the active chain and the three contract addresses are
 environment-driven — see `.env.example`.
 
 ## Demo runbook (local anvil)
@@ -26,16 +26,15 @@ anvil
 ./services/web/scripts/deploy-demo.sh
 ```
 
-This deploys `Noctua`, two `ERC20Mock`s ("Mock DAI" / "Mock WETH"), and an `OracleMock` (price
-`2000e36`) from anvil account #0, in the exact order that produces the deterministic addresses
-already baked into `src/lib/addresses.ts` as defaults for chain `31337`. It also mints starter
-balances to anvil accounts #0/#1 — but since the app no longer embeds those accounts' keys, use
-the **faucet** button in the header (see below) to fund whichever wallet you actually connect
-with instead.
+This deploys `Noctua` and two `ERC20Mock`s ("Mock USDT" / "Mock WETH") from anvil account #0, in
+the exact order that produces the deterministic addresses already baked into
+`src/lib/addresses.ts` as defaults for chain `31337`. It also mints starter balances to anvil
+accounts #0/#1 — but since the app no longer embeds those accounts' keys, use the **faucet**
+button in the header (see below) to fund whichever wallet you actually connect with instead.
 
 If your anvil account #0 wasn't at nonce 0 (e.g. you reused a dirty anvil instance), the deployed
 addresses will differ from the defaults — export `VITE_NOCTUA_ADDRESS`, `VITE_LOAN_ADDRESS`,
-`VITE_COLLATERAL_ADDRESS`, `VITE_ORACLE_ADDRESS` to match before starting the web app.
+`VITE_COLLATERAL_ADDRESS` to match before starting the web app.
 
 ### 3. Start the RFQ service
 
@@ -54,14 +53,14 @@ VITE_CHAIN_ID=31337 pnpm --filter @noctua/web dev
 Open http://localhost:5173. The dev server proxies `/api/*` to `http://localhost:3901/*` (see
 `vite.config.ts`) so the browser never needs CORS headers from the RFQ service. Connect a wallet
 pointed at `http://localhost:8545` (e.g. import one of anvil's printed private keys into
-MetaMask), then use the **faucet** button in the header to mint test DAI/WETH.
+MetaMask), then use the **faucet** button in the header to mint test USDT/WETH.
 
 ## Deploying to Base Sepolia
 
 No code changes are needed — see the root README's "Deploying to Base Sepolia" section for the
 full walkthrough (forge deploy script, RFQ service env vars, web app env vars). In short: deploy
 via `contracts/script/DeployTestnet.s.sol`, then set `VITE_CHAIN_ID=84532`,
-`VITE_RPC_URL=https://sepolia.base.org`, and the four `VITE_*_ADDRESS` vars from the deploy output
+`VITE_RPC_URL=https://sepolia.base.org`, and the three `VITE_*_ADDRESS` vars from the deploy output
 (see `.env.example`). Missing address vars on a non-anvil chain render a full-page config error
 instead of silently falling back to anvil addresses.
 
@@ -69,20 +68,20 @@ instead of silently falling back to anvil addresses.
 
 1. Click **Connect wallet** in the header (injected wallet only — MetaMask, Coinbase Wallet
    extension, etc.). If the wallet is on the wrong chain, a red banner offers to switch.
-2. Use the **faucet** button (visible once connected) to mint 100,000 DAI and 100 WETH to your
+2. Use the **faucet** button (visible once connected) to mint 100,000 USDT and 100 WETH to your
    connected address — `ERC20Mock.mint` is public, so no separate funding step is required.
-3. In the **Borrower** panel, post an RFQ (defaults: 10,000 DAI principal, 10 WETH collateral,
+3. In the **Borrower** panel, post an RFQ (defaults: 10,000 USDT principal, 10 WETH collateral,
    90-day term). The maturity is computed from the chain's latest block timestamp.
 4. In the **Maker** panel, the open RFQ appears within ~3s (polling) — including your own, since
-   one wallet plays both personas. Click **Quote**, adjust the repayment / expiry / oracle toggle
-   if desired, and **Sign & send** — this triggers an EIP-712 signature popup and approves the
-   maker's loan-asset (DAI) allowance to `Noctua`.
+   one wallet plays both personas. Click **Quote**, adjust the repayment / expiry if desired, and
+   **Sign & send** — this triggers an EIP-712 signature popup and approves the maker's loan-asset
+   (USDT) allowance to `Noctua`.
 5. Back in the **Borrower** panel, the quote appears with its implied APR and expiry countdown.
    Click **Accept** — this approves the collateral (WETH) to `Noctua`, calls `fill`, and closes
    the RFQ.
-6. The loan is now `Active`. Click **Repay** to approve the loan asset (DAI) for the repayment
+6. The loan is now `Active`. Click **Repay** to approve the loan asset (USDT) for the repayment
    amount and call `repay`.
-7. The bottom status strip shows live DAI/WETH balances for your wallet and the `Noctua`
+7. The bottom status strip shows live USDT/WETH balances for your wallet and the `Noctua`
    contract's escrow balance, plus the most recent transaction hash or error.
 
 ## Layout

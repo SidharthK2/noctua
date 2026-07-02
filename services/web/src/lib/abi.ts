@@ -9,11 +9,9 @@ const quoteTupleComponents = [
   { name: "taker", type: "address" },
   { name: "loanAsset", type: "address" },
   { name: "collateralAsset", type: "address" },
-  { name: "oracle", type: "address" },
   { name: "principal", type: "uint256" },
   { name: "repayment", type: "uint256" },
   { name: "collateral", type: "uint256" },
-  { name: "lltv", type: "uint256" },
   { name: "maturity", type: "uint256" },
   { name: "expiry", type: "uint256" },
   { name: "nonce", type: "uint256" },
@@ -93,5 +91,5 @@ export const erc20Abi = [
   },
 ] as const
 
-/** Mirrors `Noctua.Status`: None, Active, Repaid, Liquidated, Defaulted. */
-export const LOAN_STATUS = ["None", "Active", "Repaid", "Liquidated", "Defaulted"] as const
+/** Mirrors `Noctua.Status`: None, Active, Repaid, Defaulted. */
+export const LOAN_STATUS = ["None", "Active", "Repaid", "Defaulted"] as const

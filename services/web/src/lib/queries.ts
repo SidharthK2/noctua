@@ -1,25 +1,25 @@
 import { signQuote } from "@noctua/shared"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { Address } from "viem"
-import { maxUint256, zeroAddress } from "viem"
+import { maxUint256 } from "viem"
 import { useAccount, usePublicClient, useWalletClient } from "wagmi"
 import type { QuoteWire, RfqWire } from "../api.js"
 import { createRfq, getRfq, listRfqs, submitQuote } from "../api.js"
 import { erc20Abi, noctuaAbi } from "./abi.js"
 import {
   COLLATERAL_ASSET_ADDRESS,
+  COLLATERAL_DECIMALS,
   LOAN_ASSET_ADDRESS,
+  LOAN_DECIMALS,
   NOCTUA_ADDRESS,
-  ORACLE_ADDRESS,
 } from "./addresses.js"
 import { CHAIN_ID } from "./chain.js"
-import { parseUnits18 } from "./format.js"
+import { parseUnits } from "./format.js"
 import { wireQuoteToOnchain } from "./quote.js"
 import type { StatusEvent } from "./status.js"
 
-const DEFAULT_LLTV = 800_000_000_000_000_000n // 0.8e18
-const FAUCET_LOAN_AMOUNT = parseUnits18("100000") // 100,000 DAI
-const FAUCET_COLLATERAL_AMOUNT = parseUnits18("100") // 100 WETH
+const FAUCET_LOAN_AMOUNT = parseUnits("100000", LOAN_DECIMALS) // 100,000 USDT
+const FAUCET_COLLATERAL_AMOUNT = parseUnits("100", COLLATERAL_DECIMALS) // 100 WETH
 
 export type RfqDetail = RfqWire & { quotes: QuoteWire[] }
 
@@ -117,8 +117,8 @@ export function usePostRfqMutation(onStatus: (event: StatusEvent) => void) {
         borrower: address,
         loanAsset: LOAN_ASSET_ADDRESS,
         collateralAsset: COLLATERAL_ASSET_ADDRESS,
-        principal: parseUnits18(input.principalInput),
-        collateral: parseUnits18(input.collateralInput),
+        principal: parseUnits(input.principalInput, LOAN_DECIMALS),
+        collateral: parseUnits(input.collateralInput, COLLATERAL_DECIMALS),
         maturity,
       })
     },
@@ -229,12 +229,10 @@ export function useSendQuoteMutation(onStatus: (event: StatusEvent) => void) {
       rfq,
       repaymentInput,
       expiryMinutesInput,
-      oracleOn,
     }: {
       rfq: RfqWire
       repaymentInput: string
       expiryMinutesInput: string
-      oracleOn: boolean
     }) => {
       if (!walletClient || !publicClient || !address) throw new Error("connect a wallet first")
 
@@ -261,11 +259,9 @@ export function useSendQuoteMutation(onStatus: (event: StatusEvent) => void) {
         taker: rfq.borrower,
         loanAsset: rfq.loanAsset,
         collateralAsset: rfq.collateralAsset,
-        oracle: oracleOn ? ORACLE_ADDRESS : zeroAddress,
         principal: BigInt(rfq.principal),
-        repayment: parseUnits18(repaymentInput),
+        repayment: parseUnits(repaymentInput, LOAN_DECIMALS),
         collateral: BigInt(rfq.collateral),
-        lltv: oracleOn ? DEFAULT_LLTV : 0n,
         maturity: BigInt(rfq.maturity),
         expiry,
         nonce,
@@ -285,7 +281,7 @@ export function useSendQuoteMutation(onStatus: (event: StatusEvent) => void) {
   })
 }
 
-/** Faucet: mints 100,000 DAI and 100 WETH to the connected wallet via two txs (ERC20Mock.mint is
+/** Faucet: mints 100,000 USDT and 100 WETH to the connected wallet via two txs (ERC20Mock.mint is
  * public). Testnet/demo only — never wire this up against a real token. */
 export function useFaucetMutation(onStatus: (event: StatusEvent) => void) {
   const { address } = useAccount()
@@ -296,14 +292,14 @@ export function useFaucetMutation(onStatus: (event: StatusEvent) => void) {
     mutationFn: async () => {
       if (!walletClient || !publicClient || !address) throw new Error("connect a wallet first")
 
-      const daiHash = await walletClient.writeContract({
+      const usdtHash = await walletClient.writeContract({
         address: LOAN_ASSET_ADDRESS,
         abi: erc20Abi,
         functionName: "mint",
         args: [address, FAUCET_LOAN_AMOUNT],
       })
-      await publicClient.waitForTransactionReceipt({ hash: daiHash })
-      onStatus({ kind: "tx", label: "minted 100,000 DAI", hash: daiHash })
+      await publicClient.waitForTransactionReceipt({ hash: usdtHash })
+      onStatus({ kind: "tx", label: "minted 100,000 USDT", hash: usdtHash })
 
       const wethHash = await walletClient.writeContract({
         address: COLLATERAL_ASSET_ADDRESS,
