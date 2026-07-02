@@ -30,6 +30,7 @@ function addrKey(address: Address | undefined): string {
 export const queryKeys = {
   myRfqs: (borrower: Address | undefined) => ["rfqs", "mine", addrKey(borrower)] as const,
   openRfqs: () => ["rfqs", "open"] as const,
+  makerLoans: (maker: Address | undefined) => ["rfqs", "maker-loans", addrKey(maker)] as const,
   balances: (wallet: Address | undefined) => ["balances", addrKey(wallet)] as const,
 }
 
@@ -58,6 +59,32 @@ export function useOpenRfqs() {
     queryKey: queryKeys.openRfqs(),
     queryFn: () => listRfqs("open"),
     enabled: isConnected,
+    refetchInterval: 3000,
+  })
+}
+
+/** Loans the connected wallet has funded as a maker — filled RFQs whose winning quote's `maker`
+ * is the connected wallet. Once an RFQ is filled it drops out of `useOpenRfqs`, so this is the
+ * maker's only visibility into (and enforcement point for) loans it holds. */
+export function useMakerLoans() {
+  const { address } = useAccount()
+  return useQuery({
+    queryKey: queryKeys.makerLoans(address),
+    queryFn: async (): Promise<Array<{ detail: RfqDetail; winningQuote: QuoteWire }>> => {
+      const all = await listRfqs()
+      const filled = all.filter((r) => r.status === "filled" && r.filledBy)
+      const details = await Promise.all(filled.map((r) => getRfq(r.id)))
+      const mine: Array<{ detail: RfqDetail; winningQuote: QuoteWire }> = []
+      for (const detail of details) {
+        const winningQuote = detail.quotes.find((q) => q.digest === detail.filledBy)
+        if (winningQuote && winningQuote.quote.maker.toLowerCase() === address?.toLowerCase()) {
+          mine.push({ detail, winningQuote })
+        }
+      }
+      mine.sort((a, b) => b.detail.createdAt - a.detail.createdAt)
+      return mine
+    },
+    enabled: address !== undefined,
     refetchInterval: 3000,
   })
 }
@@ -213,6 +240,39 @@ export function useRepayLoanMutation(onStatus: (event: StatusEvent) => void) {
     },
     onError: (err) => {
       onStatus({ kind: "error", label: "repay failed", message: (err as Error).message })
+    },
+  })
+}
+
+/** Claim-default flow: the maker's only enforcement right. Moves escrowed collateral straight to
+ * the maker, so unlike fill/repay there's no approve step. */
+export function useClaimDefaultMutation(onStatus: (event: StatusEvent) => void) {
+  const { address } = useAccount()
+  const { data: walletClient } = useWalletClient()
+  const publicClient = usePublicClient()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ rfqId: _rfqId, quoteWire }: { rfqId: string; quoteWire: QuoteWire }) => {
+      if (!walletClient || !publicClient) throw new Error("connect a wallet first")
+      const onchain = wireQuoteToOnchain(quoteWire.quote)
+
+      const claimHash = await walletClient.writeContract({
+        address: NOCTUA_ADDRESS,
+        abi: noctuaAbi,
+        functionName: "claimDefault",
+        args: [onchain],
+      })
+      await publicClient.waitForTransactionReceipt({ hash: claimHash })
+      onStatus({ kind: "tx", label: "claimed default", hash: claimHash })
+    },
+    onSuccess: () => {
+      // The chain watcher observes the on-chain Defaulted event and flips loanStatus itself;
+      // the refetch above will pick up the change within a poll or two.
+      queryClient.invalidateQueries({ queryKey: queryKeys.makerLoans(address) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.balances(address) })
+    },
+    onError: (err) => {
+      onStatus({ kind: "error", label: "claim default failed", message: (err as Error).message })
     },
   })
 }

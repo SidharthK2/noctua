@@ -37,6 +37,13 @@ export const noctuaAbi = [
   },
   {
     type: "function",
+    name: "claimDefault",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "quote", type: "tuple", components: quoteTupleComponents }],
+    outputs: [],
+  },
+  {
+    type: "function",
     name: "hashQuote",
     stateMutability: "view",
     inputs: [{ name: "quote", type: "tuple", components: quoteTupleComponents }],
