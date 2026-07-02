@@ -37,11 +37,20 @@ pnpm check                                    # biome
 The web app and RFQ service are fully env-driven — no code changes are needed for a real deploy,
 only the steps below.
 
-1. **Deploy the contracts.** From the repo root, with a funded Base Sepolia deployer key:
+1. **Deploy the contracts.** Put a funded deployer key and an Etherscan v2 API key (one key
+   covers all chains) in `contracts/.env` (see `contracts/.env.example`):
 
    ```shell
-   PRIVATE_KEY=0x... forge script contracts/script/DeployTestnet.s.sol:DeployTestnet \
-     --root contracts --rpc-url https://sepolia.base.org --broadcast
+   DEPLOYER_PRIVATE_KEY=0x...
+   ETHERSCAN_API_KEY=...
+   ```
+
+   Then, from `contracts/` (forge auto-loads `.env`; the RPC alias and Etherscan config live in
+   `foundry.toml`):
+
+   ```shell
+   forge script script/DeployTestnet.s.sol:DeployTestnet \
+     --rpc-url base_sepolia --broadcast --verify
    ```
 
    This deploys `Noctua` and two `ERC20Mock`s ("Noctua Mock USDT" / "USDT", "Noctua Mock WETH" /
