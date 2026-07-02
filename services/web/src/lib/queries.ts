@@ -51,14 +51,13 @@ export function useMyRfqs() {
   })
 }
 
-/** Open RFQs available for the connected wallet to quote against (all of them, including its
- * own — one wallet can act as both borrower and maker in this demo). */
+/** Open RFQs — public read, no wallet required (quoting against one does need a signer).
+ * All of them are listed, including the connected wallet's own: one wallet can act as both
+ * borrower and maker in this demo. */
 export function useOpenRfqs() {
-  const { isConnected } = useAccount()
   return useQuery({
     queryKey: queryKeys.openRfqs(),
     queryFn: () => listRfqs("open"),
-    enabled: isConnected,
     refetchInterval: 3000,
   })
 }

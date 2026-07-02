@@ -181,23 +181,7 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
     )
   }
 
-  if (!isConnected || !address) {
-    return (
-      <Card className="border-zinc-800/80 shadow-lg shadow-black/20">
-        <CardHeader className="border-b border-zinc-800/60 pb-4">
-          <CardTitle className="text-xs font-medium uppercase tracking-widest text-zinc-400">
-            Maker
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center gap-2 py-12 text-center">
-            <Inbox className="size-5 text-zinc-700" />
-            <p className="text-sm text-zinc-600">Connect a wallet to quote on open requests.</p>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
+  const connected = isConnected && !!address
 
   return (
     <Card className="border-zinc-800/80 shadow-lg shadow-black/20">
@@ -205,7 +189,11 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
         <CardTitle className="text-xs font-medium uppercase tracking-widest text-zinc-400">
           Maker
         </CardTitle>
-        <AddressPill address={address} />
+        {connected ? (
+          <AddressPill address={address} />
+        ) : (
+          <span className="text-xs text-zinc-600">read-only — connect a wallet to quote</span>
+        )}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {isLoading && (
@@ -248,7 +236,8 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
                     <Button
                       type="button"
                       size="sm"
-                      disabled={sendQuote.isPending}
+                      disabled={!connected || sendQuote.isPending}
+                      title={connected ? undefined : "Connect a wallet to quote"}
                       onClick={() => startQuote(rfq)}
                     >
                       Quote
@@ -314,7 +303,7 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
           )
         })}
 
-        {myLoans.length > 0 && (
+        {connected && myLoans.length > 0 && (
           <div className="flex flex-col gap-3 pt-2">
             <span className="text-[0.65rem] font-medium uppercase tracking-widest text-zinc-500">
               My loans
