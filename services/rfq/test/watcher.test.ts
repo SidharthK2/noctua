@@ -97,6 +97,7 @@ describe.each(storeFactories)("ChainWatcher (%s)", (_name, makeStore) => {
       pollIntervalMs: 1000,
       confirmations: 0,
       startBlock: 0,
+      maxBlockRange: 10_000,
     })
 
     await watcher.poll()
@@ -129,6 +130,7 @@ describe.each(storeFactories)("ChainWatcher (%s)", (_name, makeStore) => {
       pollIntervalMs: 1000,
       confirmations: 0,
       startBlock: 0,
+      maxBlockRange: 10_000,
     })
 
     await watcher.poll()
@@ -160,6 +162,7 @@ describe.each(storeFactories)("ChainWatcher (%s)", (_name, makeStore) => {
       pollIntervalMs: 1000,
       confirmations: 0,
       startBlock: 0,
+      maxBlockRange: 10_000,
     })
 
     await watcher.poll()
@@ -214,6 +217,7 @@ describe.each(storeFactories)("ChainWatcher (%s)", (_name, makeStore) => {
       pollIntervalMs: 1000,
       confirmations: 0,
       startBlock: 0,
+      maxBlockRange: 10_000,
     })
 
     await watcher.poll()
@@ -246,6 +250,7 @@ describe.each(storeFactories)("ChainWatcher (%s)", (_name, makeStore) => {
       pollIntervalMs: 1000,
       confirmations: 0,
       startBlock: 0,
+      maxBlockRange: 10_000,
     })
 
     await watcher.poll()
@@ -296,6 +301,7 @@ describe.each(storeFactories)("ChainWatcher (%s)", (_name, makeStore) => {
       pollIntervalMs: 1000,
       confirmations: 0,
       startBlock: 0,
+      maxBlockRange: 10_000,
     })
 
     await watcher.poll()
@@ -305,12 +311,66 @@ describe.each(storeFactories)("ChainWatcher (%s)", (_name, makeStore) => {
     expect(store.hasQuote(otherMakerDigest)).toBe(true)
   })
 
+  it("splits a large range into maxBlockRange chunks and persists the cursor per chunk", async () => {
+    const ranges: Array<[bigint, bigint]> = []
+    const client = makeStubClient({
+      blockNumber: 25n,
+      logsByRange: (from, to) => {
+        ranges.push([from, to])
+        return []
+      },
+    })
+    const watcher = new ChainWatcher(client, NOCTUA_ADDRESS, store, {
+      pollIntervalMs: 1000,
+      confirmations: 0,
+      startBlock: 1,
+      maxBlockRange: 10,
+    })
+
+    await watcher.poll()
+
+    expect(ranges).toEqual([
+      [1n, 10n],
+      [11n, 20n],
+      [21n, 25n],
+    ])
+    expect(store.getCursor()).toBe(25n)
+  })
+
+  it("keeps per-chunk progress when a later chunk fails mid-backfill", async () => {
+    let calls = 0
+    const client = {
+      getBlockNumber: vi.fn().mockResolvedValue(25n),
+      getLogs: vi.fn().mockImplementation(async () => {
+        calls += 1
+        if (calls === 2) throw new Error("rpc range error")
+        return []
+      }),
+      // biome-ignore lint/suspicious/noExplicitAny: stub cast to viem's PublicClient for tests
+    } as any
+    const watcher = new ChainWatcher(client, NOCTUA_ADDRESS, store, {
+      pollIntervalMs: 1000,
+      confirmations: 0,
+      startBlock: 1,
+      maxBlockRange: 10,
+    })
+
+    await watcher.poll()
+    // first chunk (1-10) succeeded and was persisted; second (11-20) threw
+    expect(store.getCursor()).toBe(10n)
+
+    // the next poll resumes from the persisted cursor, not from the start
+    await watcher.poll()
+    expect(store.getCursor()).toBe(25n)
+  })
+
   it("advances the cursor to latestBlock - confirmations", async () => {
     const client = makeStubClient({ blockNumber: 100n })
     const watcher = new ChainWatcher(client, NOCTUA_ADDRESS, store, {
       pollIntervalMs: 1000,
       confirmations: 5,
       startBlock: 0,
+      maxBlockRange: 10_000,
     })
 
     await watcher.poll()
@@ -330,6 +390,7 @@ describe.each(storeFactories)("ChainWatcher (%s)", (_name, makeStore) => {
       pollIntervalMs: 1000,
       confirmations: 5,
       startBlock: 0,
+      maxBlockRange: 10_000,
     })
 
     await watcher.poll()
@@ -357,6 +418,7 @@ describe.each(storeFactories)("ChainWatcher (%s)", (_name, makeStore) => {
         pollIntervalMs: 10,
         confirmations: 0,
         startBlock: 0,
+        maxBlockRange: 10_000,
       })
 
       watcher.start()
@@ -386,6 +448,7 @@ describe.each(storeFactories)("ChainWatcher (%s)", (_name, makeStore) => {
       pollIntervalMs: 1000,
       confirmations: 0,
       startBlock: 0,
+      maxBlockRange: 10_000,
     })
 
     await expect(watcher.poll()).resolves.toBeUndefined()

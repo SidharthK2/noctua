@@ -107,6 +107,8 @@ RPC_URL=https://sepolia.base.org
 NOCTUA_ADDRESS=...
 START_BLOCK=<deploy block>
 CONFIRMATIONS=1
+# eth_getLogs range per call — set to your RPC provider's cap (Alchemy free tier: 10)
+MAX_BLOCK_RANGE=2000
 ```
 
 `PORT`, `DB_PATH=/data/noctua-rfq.db`, and `STATIC_DIR` are preset in the image. `GET /health`

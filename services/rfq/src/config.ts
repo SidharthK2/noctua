@@ -12,6 +12,8 @@ export type Config = {
   watchIntervalMs: number
   confirmations: number
   startBlock: bigint
+  /** Max blocks per eth_getLogs call (provider range caps; Alchemy free tier = 10). */
+  maxBlockRange: bigint
   /** Directory of built frontend assets to serve alongside the API; null = API-only. */
   staticDir: string | null
 }
@@ -26,6 +28,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     watchIntervalMs: env.WATCH_INTERVAL_MS ? Number(env.WATCH_INTERVAL_MS) : 2000,
     confirmations: env.CONFIRMATIONS ? Number(env.CONFIRMATIONS) : 0,
     startBlock: env.START_BLOCK ? BigInt(env.START_BLOCK) : 0n,
+    maxBlockRange: env.MAX_BLOCK_RANGE ? BigInt(env.MAX_BLOCK_RANGE) : 2000n,
     staticDir: env.STATIC_DIR ?? null,
   }
 }

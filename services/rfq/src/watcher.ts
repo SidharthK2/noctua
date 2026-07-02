@@ -6,6 +6,8 @@ export type ChainWatcherOptions = {
   pollIntervalMs: number
   confirmations: bigint | number
   startBlock: bigint | number
+  /** Max blocks per eth_getLogs call — RPC providers cap the range (Alchemy free tier: 10). */
+  maxBlockRange: bigint | number
 }
 
 type WatcherLog = {
@@ -29,6 +31,7 @@ export class ChainWatcher {
   private readonly pollIntervalMs: number
   private readonly confirmations: bigint
   private readonly startBlock: bigint
+  private readonly maxBlockRange: bigint
 
   private timer: ReturnType<typeof setInterval> | undefined
   private polling = false
@@ -45,37 +48,42 @@ export class ChainWatcher {
     this.pollIntervalMs = opts.pollIntervalMs
     this.confirmations = BigInt(opts.confirmations)
     this.startBlock = BigInt(opts.startBlock)
+    this.maxBlockRange = BigInt(opts.maxBlockRange)
   }
 
-  /** Runs a single poll pass: fetch confirmed logs since the cursor and apply them in order. */
+  /** Runs a single poll pass: fetch confirmed logs since the cursor and apply them in order.
+   * The range is processed in chunks of `maxBlockRange`, persisting the cursor after each chunk,
+   * so a provider range cap or a mid-backfill failure never stalls progress permanently. */
   async poll(): Promise<void> {
     try {
       const latest = await this.publicClient.getBlockNumber()
       const to = latest - this.confirmations
-      const cursor = this.store.getCursor()
-      const from = (cursor ?? this.startBlock - 1n) + 1n
+      let from = (this.store.getCursor() ?? this.startBlock - 1n) + 1n
 
-      if (from > to) return
+      while (from <= to) {
+        const chunkTo = from + this.maxBlockRange - 1n < to ? from + this.maxBlockRange - 1n : to
 
-      const logs = (await this.publicClient.getLogs({
-        address: this.noctuaAddress,
-        events: watcherAbi,
-        fromBlock: from,
-        toBlock: to,
-      })) as unknown as WatcherLog[]
+        const logs = (await this.publicClient.getLogs({
+          address: this.noctuaAddress,
+          events: watcherAbi,
+          fromBlock: from,
+          toBlock: chunkTo,
+        })) as unknown as WatcherLog[]
 
-      const ordered = [...logs].sort((a, b) => {
-        if (a.blockNumber !== b.blockNumber) return a.blockNumber < b.blockNumber ? -1 : 1
-        return a.logIndex - b.logIndex
-      })
+        const ordered = [...logs].sort((a, b) => {
+          if (a.blockNumber !== b.blockNumber) return a.blockNumber < b.blockNumber ? -1 : 1
+          return a.logIndex - b.logIndex
+        })
 
-      for (const log of ordered) {
-        this.applyLog(log)
+        for (const log of ordered) {
+          this.applyLog(log)
+        }
+
+        this.store.setCursor(chunkTo)
+        from = chunkTo + 1n
       }
-
-      this.store.setCursor(to)
     } catch (err) {
-      console.error("watcher: poll failed, will retry", err)
+      console.error("watcher: poll failed, will retry from last persisted cursor", err)
     }
   }
 

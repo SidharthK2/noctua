@@ -18,6 +18,7 @@ const watcher = new ChainWatcher(publicClient, config.noctuaAddress, store, {
   pollIntervalMs: config.watchIntervalMs,
   confirmations: config.confirmations,
   startBlock: config.startBlock,
+  maxBlockRange: config.maxBlockRange,
 })
 watcher.start()
 
