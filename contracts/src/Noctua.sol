@@ -5,10 +5,8 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {Quote, QuoteLib} from "./libraries/QuoteLib.sol";
-import {IOracle} from "./interfaces/IOracle.sol";
 
 /// @title Noctua
 /// @notice RFQ-based fixed-rate lending settlement contract. Makers (lenders) sign `Quote`s
@@ -29,24 +27,18 @@ import {IOracle} from "./interfaces/IOracle.sol";
 ///   `block.timestamp == maturity`); default is strictly after (`claimDefault` requires
 ///   `block.timestamp > maturity`). A loan can never be simultaneously repayable and
 ///   defaultable.
-/// - When a `Quote.oracle` is set, positions are subject to pre-maturity margin liquidation
-///   against `lltv`. When it is zero, the loan is pawn-style: uncollateralized by any oracle
-///   check pre-maturity, and enforced purely by forfeiture of collateral at default.
+/// - No price is ever read on-chain: this contract is fully oracle-free. There is no
+///   pre-maturity margin liquidation. Enforcement is pawn-style — the only two ways a loan
+///   resolves are repayment by maturity (inclusive) or permissionless `claimDefault` strictly
+///   after maturity, which forfeits the full collateral to the maker regardless of its value.
 contract Noctua is EIP712 {
     using SafeERC20 for IERC20;
     using QuoteLib for Quote;
-
-    /// @dev Fixed-point scale used for `lltv` ratios.
-    uint256 internal constant WAD = 1e18;
-
-    /// @dev Scale of `IOracle.price()`, following the Morpho Blue convention.
-    uint256 internal constant ORACLE_PRICE_SCALE = 1e36;
 
     enum Status {
         None,
         Active,
         Repaid,
-        Liquidated,
         Defaulted
     }
 
@@ -67,7 +59,6 @@ contract Noctua is EIP712 {
 
     event Filled(bytes32 indexed quoteHash, address indexed maker, address indexed borrower, Quote quote);
     event Repaid(bytes32 indexed quoteHash, address indexed payer);
-    event Liquidated(bytes32 indexed quoteHash, address indexed liquidator);
     event Defaulted(bytes32 indexed quoteHash);
     event Cancelled(bytes32 indexed quoteHash, address indexed maker);
     event NonceBumped(address indexed maker, uint256 newNonce);
@@ -77,15 +68,12 @@ contract Noctua is EIP712 {
     error NotDesignatedTaker();
     error NotMaker();
     error InvalidNonce();
-    error LltvTooHigh();
     error QuoteCancelled();
     error LoanNotNone();
     error InvalidSignature();
     error LoanNotActive();
     error PastMaturity();
     error NotYetMaturity();
-    error NoOracle();
-    error PositionHealthy();
 
     constructor() EIP712("Noctua", "1") {}
 
@@ -101,7 +89,6 @@ contract Noctua is EIP712 {
         if (block.timestamp >= quote.maturity) revert MaturityNotInFuture();
         if (quote.taker != address(0) && quote.taker != msg.sender) revert NotDesignatedTaker();
         if (quote.nonce != nonces[quote.maker]) revert InvalidNonce();
-        if (quote.oracle != address(0) && quote.lltv >= WAD) revert LltvTooHigh();
 
         quoteHash = _hashTypedDataV4(quote.structHash());
 
@@ -133,31 +120,6 @@ contract Noctua is EIP712 {
 
         IERC20(quote.loanAsset).safeTransferFrom(msg.sender, quote.maker, quote.repayment);
         IERC20(quote.collateralAsset).safeTransfer(loan.borrower, quote.collateral);
-    }
-
-    /// @notice Liquidates an under-collateralized loan before maturity. Reverts if the quote
-    /// carries no oracle (pawn-style loans are never margin-liquidated) or if the position is
-    /// still healthy. The liquidator pays the full `repayment` to the maker and receives the
-    /// full `collateral`; the incentive is the spread between collateral value and repayment,
-    /// with no additional bonus factor.
-    function liquidate(Quote calldata quote) external {
-        bytes32 quoteHash = _hashTypedDataV4(quote.structHash());
-        Loan memory loan = loans[quoteHash];
-
-        if (loan.status != Status.Active) revert LoanNotActive();
-        if (quote.oracle == address(0)) revert NoOracle();
-        if (block.timestamp > quote.maturity) revert PastMaturity();
-
-        uint256 collateralValue = Math.mulDiv(quote.collateral, IOracle(quote.oracle).price(), ORACLE_PRICE_SCALE);
-        uint256 maxDebt = Math.mulDiv(collateralValue, quote.lltv, WAD);
-        if (quote.repayment <= maxDebt) revert PositionHealthy();
-
-        loans[quoteHash].status = Status.Liquidated;
-
-        emit Liquidated(quoteHash, msg.sender);
-
-        IERC20(quote.loanAsset).safeTransferFrom(msg.sender, quote.maker, quote.repayment);
-        IERC20(quote.collateralAsset).safeTransfer(msg.sender, quote.collateral);
     }
 
     /// @notice Claims a defaulted loan strictly after maturity. Callable by anyone; all

@@ -10,11 +10,9 @@ export type Quote = {
   taker: Address
   loanAsset: Address
   collateralAsset: Address
-  oracle: Address
   principal: bigint
   repayment: bigint
   collateral: bigint
-  lltv: bigint
   maturity: bigint
   expiry: bigint
   nonce: bigint

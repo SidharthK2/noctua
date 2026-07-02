@@ -26,11 +26,9 @@ type QuoteRow = {
   taker: string
   loan_asset: string
   collateral_asset: string
-  oracle: string
   principal: string
   repayment: string
   collateral: string
-  lltv: string
   maturity: string
   expiry: string
   nonce: string
@@ -62,11 +60,9 @@ function rowToStoredQuote(row: QuoteRow): StoredQuote {
     taker: row.taker as Address,
     loanAsset: row.loan_asset as Address,
     collateralAsset: row.collateral_asset as Address,
-    oracle: row.oracle as Address,
     principal: BigInt(row.principal),
     repayment: BigInt(row.repayment),
     collateral: BigInt(row.collateral),
-    lltv: BigInt(row.lltv),
     maturity: BigInt(row.maturity),
     expiry: BigInt(row.expiry),
     nonce: BigInt(row.nonce),
@@ -131,11 +127,9 @@ export class SqliteRfqStore implements RfqStore {
         taker TEXT NOT NULL,
         loan_asset TEXT NOT NULL,
         collateral_asset TEXT NOT NULL,
-        oracle TEXT NOT NULL,
         principal TEXT NOT NULL,
         repayment TEXT NOT NULL,
         collateral TEXT NOT NULL,
-        lltv TEXT NOT NULL,
         maturity TEXT NOT NULL,
         expiry TEXT NOT NULL,
         nonce TEXT NOT NULL,
@@ -170,10 +164,10 @@ export class SqliteRfqStore implements RfqStore {
     this.hasQuoteStmt = this.db.prepare(`SELECT 1 FROM quotes WHERE digest = ?`)
     this.insertQuoteStmt = this.db.prepare(`
       INSERT INTO quotes (
-        digest, rfq_id, maker, taker, loan_asset, collateral_asset, oracle,
-        principal, repayment, collateral, lltv, maturity, expiry, nonce,
+        digest, rfq_id, maker, taker, loan_asset, collateral_asset,
+        principal, repayment, collateral, maturity, expiry, nonce,
         signature, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     this.listQuotesForRfqStmt = this.db.prepare(`SELECT * FROM quotes WHERE rfq_id = ?`)
     this.getQuoteByDigestStmt = this.db.prepare(`SELECT * FROM quotes WHERE digest = ?`)
@@ -253,11 +247,9 @@ export class SqliteRfqStore implements RfqStore {
       quote.taker,
       quote.loanAsset,
       quote.collateralAsset,
-      quote.oracle,
       quote.principal.toString(),
       quote.repayment.toString(),
       quote.collateral.toString(),
-      quote.lltv.toString(),
       quote.maturity.toString(),
       quote.expiry.toString(),
       quote.nonce.toString(),
@@ -290,7 +282,7 @@ export class SqliteRfqStore implements RfqStore {
     this.markFilledStmt.run(quoteDigest, txHash, txHash, quoteRow.rfq_id)
   }
 
-  setLoanStatus(quoteDigest: Hex, status: "repaid" | "liquidated" | "defaulted", txHash: Hex): void {
+  setLoanStatus(quoteDigest: Hex, status: "repaid" | "defaulted", txHash: Hex): void {
     this.setLoanStatusStmt.run(status, txHash, quoteDigest)
   }
 

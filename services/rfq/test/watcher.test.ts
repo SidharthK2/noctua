@@ -28,11 +28,9 @@ function baseQuote(overrides: Partial<Quote> = {}): Quote {
     taker: BORROWER,
     loanAsset: LOAN_ASSET,
     collateralAsset: COLLATERAL_ASSET,
-    oracle: "0x0000000000000000000000000000000000000000",
     principal: 10_000n,
     repayment: 10_400n,
     collateral: 5_000_000_000_000_000_000n,
-    lltv: 800_000_000_000_000_000n,
     maturity: 9_999_999_999n,
     expiry: 9_999_999_999n,
     nonce: 0n,
@@ -138,37 +136,6 @@ describe.each(storeFactories)("ChainWatcher (%s)", (_name, makeStore) => {
     const updated = store.getRfq(rfq.id)
     expect(updated?.loanStatus).toBe("repaid")
     expect(updated?.loanTxHash).toBe(txFor(11))
-  })
-
-  it("Liquidated event marks the filled RFQ's loanStatus liquidated and records the tx hash", async () => {
-    const rfq = store.createRfq(baseRfq())
-    const digest = digestFor(12)
-    store.addQuote({ digest, rfqId: rfq.id, quote: baseQuote(), signature: "0xabcd", createdAt: 0 })
-    store.markRfqFilled(digest, txFor(12))
-
-    const client = makeStubClient({
-      blockNumber: 10n,
-      logsByRange: () => [
-        {
-          eventName: "Liquidated",
-          args: { quoteHash: digest, liquidator: MAKER },
-          blockNumber: 5n,
-          logIndex: 0,
-          transactionHash: txFor(13),
-        },
-      ],
-    })
-    const watcher = new ChainWatcher(client, NOCTUA_ADDRESS, store, {
-      pollIntervalMs: 1000,
-      confirmations: 0,
-      startBlock: 0,
-    })
-
-    await watcher.poll()
-
-    const updated = store.getRfq(rfq.id)
-    expect(updated?.loanStatus).toBe("liquidated")
-    expect(updated?.loanTxHash).toBe(txFor(13))
   })
 
   it("Defaulted event marks the filled RFQ's loanStatus defaulted and records the tx hash", async () => {

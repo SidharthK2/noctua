@@ -9,7 +9,7 @@ export type ChainWatcherOptions = {
 }
 
 type WatcherLog = {
-  eventName: "Filled" | "Cancelled" | "NonceBumped" | "Repaid" | "Liquidated" | "Defaulted"
+  eventName: "Filled" | "Cancelled" | "NonceBumped" | "Repaid" | "Defaulted"
   args: Record<string, unknown>
   blockNumber: bigint
   logIndex: number
@@ -19,7 +19,7 @@ type WatcherLog = {
 /**
  * Observes Noctua settlement events on-chain so RFQ closure and loan lifecycle are derived from
  * confirmed chain state rather than a trusted client call. Polls for `Filled` / `Cancelled` /
- * `NonceBumped` / `Repaid` / `Liquidated` / `Defaulted` logs, applies them to the store, and
+ * `NonceBumped` / `Repaid` / `Defaulted` logs, applies them to the store, and
  * advances a durable cursor.
  */
 export class ChainWatcher {
@@ -100,11 +100,6 @@ export class ChainWatcher {
       case "Repaid": {
         const quoteHash = log.args.quoteHash as Hex
         this.store.setLoanStatus(quoteHash, "repaid", log.transactionHash)
-        break
-      }
-      case "Liquidated": {
-        const quoteHash = log.args.quoteHash as Hex
-        this.store.setLoanStatus(quoteHash, "liquidated", log.transactionHash)
         break
       }
       case "Defaulted": {

@@ -7,14 +7,12 @@ import {Noctua} from "../src/Noctua.sol";
 import {Quote, QuoteLib} from "../src/libraries/QuoteLib.sol";
 
 import {ERC20Mock} from "./mocks/ERC20Mock.sol";
-import {OracleMock} from "./mocks/OracleMock.sol";
 import {ERC1271WalletMock} from "./mocks/ERC1271WalletMock.sol";
 
 contract NoctuaTest is Test {
     Noctua internal noctua;
     ERC20Mock internal loanAsset;
     ERC20Mock internal collateralAsset;
-    OracleMock internal oracle;
 
     uint256 internal makerPk = 0xA11CE;
     address internal maker;
@@ -24,14 +22,11 @@ contract NoctuaTest is Test {
     uint256 internal constant PRINCIPAL = 10_000e18;
     uint256 internal constant REPAYMENT = 10_400e18;
     uint256 internal constant COLLATERAL = 10e18;
-    uint256 internal constant LLTV = 0.8e18;
-    uint256 internal constant ORACLE_PRICE = 2000e36;
 
     function setUp() public {
         noctua = new Noctua();
-        loanAsset = new ERC20Mock("Loan", "LOAN");
-        collateralAsset = new ERC20Mock("Collateral", "COLL");
-        oracle = new OracleMock(ORACLE_PRICE);
+        loanAsset = new ERC20Mock("Loan", "LOAN", 18);
+        collateralAsset = new ERC20Mock("Collateral", "COLL", 18);
 
         maker = vm.addr(makerPk);
         borrower = makeAddr("borrower");
@@ -58,11 +53,9 @@ contract NoctuaTest is Test {
             taker: address(0),
             loanAsset: address(loanAsset),
             collateralAsset: address(collateralAsset),
-            oracle: address(oracle),
             principal: PRINCIPAL,
             repayment: REPAYMENT,
             collateral: COLLATERAL,
-            lltv: LLTV,
             maturity: block.timestamp + 90 days,
             expiry: block.timestamp + 1 days,
             nonce: 0
@@ -194,26 +187,6 @@ contract NoctuaTest is Test {
         noctua.fill(q, sig);
     }
 
-    function test_fill_reverts_lltvTooHighWithOracle() public {
-        Quote memory q = _quote();
-        q.lltv = 1e18;
-        bytes memory sig = _sign(q, makerPk);
-
-        vm.prank(borrower);
-        vm.expectRevert(Noctua.LltvTooHigh.selector);
-        noctua.fill(q, sig);
-    }
-
-    function test_fill_lltvAboveWadAllowed_whenNoOracle() public {
-        Quote memory q = _quote();
-        q.oracle = address(0);
-        q.lltv = 1e18;
-        bytes memory sig = _sign(q, makerPk);
-
-        vm.prank(borrower);
-        noctua.fill(q, sig);
-    }
-
     // ---------------------------------------------------------------------
     // repay
     // ---------------------------------------------------------------------
@@ -281,90 +254,6 @@ contract NoctuaTest is Test {
         vm.prank(borrower);
         vm.expectRevert(Noctua.LoanNotActive.selector);
         noctua.repay(q);
-    }
-
-    // ---------------------------------------------------------------------
-    // liquidate
-    // ---------------------------------------------------------------------
-
-    function test_liquidate_reverts_whileHealthy() public {
-        Quote memory q = _quote();
-        _fill(q);
-
-        vm.prank(liquidator);
-        vm.expectRevert(Noctua.PositionHealthy.selector);
-        noctua.liquidate(q);
-    }
-
-    function test_liquidate_succeeds_afterPriceDrop() public {
-        Quote memory q = _quote();
-        _fill(q);
-        oracle.setPrice(1200e36);
-
-        uint256 liquidatorLoanBefore = loanAsset.balanceOf(liquidator);
-        uint256 liquidatorCollateralBefore = collateralAsset.balanceOf(liquidator);
-        uint256 makerLoanBefore = loanAsset.balanceOf(maker);
-
-        vm.prank(liquidator);
-        noctua.liquidate(q);
-
-        assertEq(loanAsset.balanceOf(liquidator), liquidatorLoanBefore - REPAYMENT);
-        assertEq(collateralAsset.balanceOf(liquidator), liquidatorCollateralBefore + COLLATERAL);
-        assertEq(loanAsset.balanceOf(maker), makerLoanBefore + REPAYMENT);
-
-        (, Noctua.Status status) = noctua.loans(noctua.hashQuote(q));
-        assertEq(uint8(status), uint8(Noctua.Status.Liquidated));
-    }
-
-    function test_liquidate_boundary_exactlyHealthy_reverts() public {
-        // maxDebt = collateral * price / 1e36 * lltv / 1e18 = REPAYMENT
-        // => price = REPAYMENT * 1e36 * 1e18 / (COLLATERAL * LLTV)
-        uint256 price = (REPAYMENT * 1e36 * 1e18) / (COLLATERAL * LLTV);
-
-        Quote memory q = _quote();
-        _fill(q);
-        oracle.setPrice(price);
-
-        vm.prank(liquidator);
-        vm.expectRevert(Noctua.PositionHealthy.selector);
-        noctua.liquidate(q);
-    }
-
-    function test_liquidate_boundary_oneWeiAbove_liquidatable() public {
-        uint256 price = (REPAYMENT * 1e36 * 1e18) / (COLLATERAL * LLTV);
-
-        Quote memory q = _quote();
-        // Bump repayment by 1 wei relative to the exact-health price so it becomes unhealthy.
-        q.repayment = REPAYMENT + 1;
-        bytes32 quoteHash = _fill(q);
-        oracle.setPrice(price);
-
-        vm.prank(liquidator);
-        noctua.liquidate(q);
-
-        (, Noctua.Status status) = noctua.loans(quoteHash);
-        assertEq(uint8(status), uint8(Noctua.Status.Liquidated));
-    }
-
-    function test_liquidate_reverts_noOracle() public {
-        Quote memory q = _quote();
-        q.oracle = address(0);
-        _fill(q);
-
-        vm.prank(liquidator);
-        vm.expectRevert(Noctua.NoOracle.selector);
-        noctua.liquidate(q);
-    }
-
-    function test_liquidate_reverts_pastMaturity() public {
-        Quote memory q = _quote();
-        _fill(q);
-        oracle.setPrice(1200e36);
-
-        vm.warp(q.maturity + 1);
-        vm.prank(liquidator);
-        vm.expectRevert(Noctua.PastMaturity.selector);
-        noctua.liquidate(q);
     }
 
     // ---------------------------------------------------------------------
@@ -481,7 +370,7 @@ contract NoctuaTest is Test {
 
     function test_typehash_matchesLiteralTypeString() public pure {
         bytes32 expected = keccak256(
-            "Quote(address maker,address taker,address loanAsset,address collateralAsset,address oracle,uint256 principal,uint256 repayment,uint256 collateral,uint256 lltv,uint256 maturity,uint256 expiry,uint256 nonce)"
+            "Quote(address maker,address taker,address loanAsset,address collateralAsset,uint256 principal,uint256 repayment,uint256 collateral,uint256 maturity,uint256 expiry,uint256 nonce)"
         );
         assertEq(QuoteLib.QUOTE_TYPEHASH, expected);
     }

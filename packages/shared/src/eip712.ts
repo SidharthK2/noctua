@@ -11,7 +11,7 @@ import type { Quote } from "./types.js"
 
 /** Literal EIP-712 type string for `Quote`, byte-identical to QuoteLib.sol's QUOTE_TYPEHASH input. */
 export const QUOTE_TYPE_STRING =
-  "Quote(address maker,address taker,address loanAsset,address collateralAsset,address oracle,uint256 principal,uint256 repayment,uint256 collateral,uint256 lltv,uint256 maturity,uint256 expiry,uint256 nonce)"
+  "Quote(address maker,address taker,address loanAsset,address collateralAsset,uint256 principal,uint256 repayment,uint256 collateral,uint256 maturity,uint256 expiry,uint256 nonce)"
 
 /** keccak256(QUOTE_TYPE_STRING) — must byte-match QuoteLib.QUOTE_TYPEHASH on-chain. */
 export const QUOTE_TYPEHASH: Hex = keccak256(toHex(QUOTE_TYPE_STRING))
@@ -23,11 +23,9 @@ export const QUOTE_EIP712_TYPES = {
     { name: "taker", type: "address" },
     { name: "loanAsset", type: "address" },
     { name: "collateralAsset", type: "address" },
-    { name: "oracle", type: "address" },
     { name: "principal", type: "uint256" },
     { name: "repayment", type: "uint256" },
     { name: "collateral", type: "uint256" },
-    { name: "lltv", type: "uint256" },
     { name: "maturity", type: "uint256" },
     { name: "expiry", type: "uint256" },
     { name: "nonce", type: "uint256" },
@@ -60,8 +58,6 @@ export function quoteStructHash(quote: Quote): Hex {
         { type: "address" },
         { type: "address" },
         { type: "address" },
-        { type: "address" },
-        { type: "uint256" },
         { type: "uint256" },
         { type: "uint256" },
         { type: "uint256" },
@@ -75,11 +71,9 @@ export function quoteStructHash(quote: Quote): Hex {
         quote.taker,
         quote.loanAsset,
         quote.collateralAsset,
-        quote.oracle,
         quote.principal,
         quote.repayment,
         quote.collateral,
-        quote.lltv,
         quote.maturity,
         quote.expiry,
         quote.nonce,

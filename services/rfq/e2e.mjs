@@ -9,7 +9,6 @@ const API = "http://localhost:3901/api"
 const NOCTUA = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
 const LOAN = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
 const COLL = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
-const ORACLE = "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
 const OUT = "/Users/sid/repos/eth/noctua/contracts/out"
 
 const noctuaAbi = JSON.parse(readFileSync(`${OUT}/Noctua.sol/Noctua.json`, "utf8")).abi
@@ -79,11 +78,9 @@ const quote = {
   taker: borrower.address,
   loanAsset: LOAN,
   collateralAsset: COLL,
-  oracle: ORACLE,
   principal,
   repayment,
   collateral,
-  lltv: 8n * 10n ** 17n,
   maturity,
   expiry: now + 3_600n,
   nonce: 0n,
@@ -117,11 +114,9 @@ const onchainQuote = {
   taker: q.taker,
   loanAsset: q.loanAsset,
   collateralAsset: q.collateralAsset,
-  oracle: q.oracle,
   principal: BigInt(q.principal),
   repayment: BigInt(q.repayment),
   collateral: BigInt(q.collateral),
-  lltv: BigInt(q.lltv),
   maturity: BigInt(q.maturity),
   expiry: BigInt(q.expiry),
   nonce: BigInt(q.nonce),
@@ -195,11 +190,9 @@ const quote2 = {
   taker: borrower.address,
   loanAsset: LOAN,
   collateralAsset: COLL,
-  oracle: ORACLE,
   principal,
   repayment,
   collateral,
-  lltv: 8n * 10n ** 17n,
   maturity: maturity2,
   expiry: now2 + 3_600n,
   nonce: 0n,

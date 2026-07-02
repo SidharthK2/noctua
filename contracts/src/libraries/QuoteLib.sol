@@ -11,6 +11,10 @@ pragma solidity ^0.8.30;
 ///
 /// Two quotes with identical fields hash identically, so only one of them is fillable.
 /// Makers issuing several otherwise-identical quotes should vary `expiry` by a second.
+///
+/// No price is ever read on-chain. Enforcement is pawn-style: the borrower may repay any time
+/// up to and including `maturity`, or the collateral is forfeited to the maker via permissionless
+/// `claimDefault` once `maturity` has strictly passed. There is no pre-maturity liquidation path.
 struct Quote {
     /// @dev Lender. Must sign the EIP-712 digest of this struct (EOA or ERC-1271).
     address maker;
@@ -20,19 +24,12 @@ struct Quote {
     address loanAsset;
     /// @dev Token escrowed by the borrower until repayment.
     address collateralAsset;
-    /// @dev Prices collateral in loan-asset terms (1e36 scale). address(0) disables
-    /// pre-maturity liquidation entirely: the loan is then pawn-style, enforced only by
-    /// default at maturity.
-    address oracle;
     /// @dev Loan-asset amount sent maker → taker at fill.
     uint256 principal;
     /// @dev Loan-asset amount owed to the maker by maturity.
     uint256 repayment;
     /// @dev Collateral-asset amount escrowed at fill.
     uint256 collateral;
-    /// @dev Max healthy debt as a WAD fraction of collateral value. The position is
-    /// liquidatable once `repayment > collateralValue * lltv`. Ignored when `oracle` is 0.
-    uint256 lltv;
     /// @dev Timestamp the repayment is due by (inclusive). Afterwards the loan is in default.
     uint256 maturity;
     /// @dev Timestamp the quote stops being fillable (inclusive).
@@ -43,7 +40,7 @@ struct Quote {
 
 library QuoteLib {
     bytes32 internal constant QUOTE_TYPEHASH = keccak256(
-        "Quote(address maker,address taker,address loanAsset,address collateralAsset,address oracle,uint256 principal,uint256 repayment,uint256 collateral,uint256 lltv,uint256 maturity,uint256 expiry,uint256 nonce)"
+        "Quote(address maker,address taker,address loanAsset,address collateralAsset,uint256 principal,uint256 repayment,uint256 collateral,uint256 maturity,uint256 expiry,uint256 nonce)"
     );
 
     /// @dev EIP-712 struct hash. `abi.encode(TYPEHASH, quote)` matches the per-field

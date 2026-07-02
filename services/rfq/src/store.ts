@@ -3,7 +3,7 @@ import type { Address, Hex } from "viem"
 
 export type RfqStatus = "open" | "filled" | "withdrawn"
 
-export type LoanStatus = "active" | "repaid" | "liquidated" | "defaulted"
+export type LoanStatus = "active" | "repaid" | "defaulted"
 
 export type Rfq = {
   id: string
@@ -19,7 +19,7 @@ export type Rfq = {
   fillTxHash: Hex | null
   /** Mirrors the on-chain loan lifecycle once filled; null until the watcher observes a Filled log. */
   loanStatus: LoanStatus | null
-  /** Tx hash of the last event that changed loanStatus (Filled/Repaid/Liquidated/Defaulted). */
+  /** Tx hash of the last event that changed loanStatus (Filled/Repaid/Defaulted). */
   loanTxHash: Hex | null
 }
 
@@ -57,7 +57,7 @@ export interface RfqStore {
    * Updates the loan lifecycle status of the RFQ backing `quoteDigest`. No-op if no RFQ was
    * filled by that digest (unknown digest or the RFQ was never filled).
    */
-  setLoanStatus(quoteDigest: Hex, status: "repaid" | "liquidated" | "defaulted", txHash: Hex): void
+  setLoanStatus(quoteDigest: Hex, status: "repaid" | "defaulted", txHash: Hex): void
   /** Removes a stored quote by digest (e.g. on-chain cancellation). */
   removeQuoteByDigest(digest: Hex): void
   /** Removes stored quotes from `maker` signed at a nonce below `currentNonce`. */
@@ -143,7 +143,7 @@ export class MemoryRfqStore implements RfqStore {
     rfq.loanTxHash = txHash
   }
 
-  setLoanStatus(quoteDigest: Hex, status: "repaid" | "liquidated" | "defaulted", txHash: Hex): void {
+  setLoanStatus(quoteDigest: Hex, status: "repaid" | "defaulted", txHash: Hex): void {
     const rfq = [...this.rfqs.values()].find((r) => r.filledBy === quoteDigest)
     if (rfq?.status !== "filled") return
     rfq.loanStatus = status
