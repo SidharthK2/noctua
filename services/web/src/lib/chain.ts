@@ -1,8 +1,9 @@
 import type { Chain } from "viem"
-import { baseSepolia, foundry } from "viem/chains"
+import { base, baseSepolia, foundry } from "viem/chains"
 
 /** Default RPC URL per supported chain id, used when `VITE_RPC_URL` is unset. */
 const DEFAULT_RPC_BY_CHAIN_ID: Record<number, string> = {
+  [base.id]: "https://mainnet.base.org",
   [baseSepolia.id]: "https://sepolia.base.org",
   [foundry.id]: "http://localhost:8545",
 }
@@ -12,8 +13,8 @@ function readChainId(): number {
   return raw ? Number(raw) : baseSepolia.id
 }
 
-/** The two chains this demo can run against. Order matters for wagmi's non-empty tuple type. */
-export const SUPPORTED_CHAINS = [baseSepolia, foundry] as const
+/** The chains this app can run against. Order matters for wagmi's non-empty tuple type. */
+export const SUPPORTED_CHAINS = [base, baseSepolia, foundry] as const
 
 /** Active chain id — `VITE_CHAIN_ID`, defaulting to Base Sepolia (84532). */
 export const CHAIN_ID = readChainId()
@@ -21,6 +22,9 @@ export const CHAIN_ID = readChainId()
 /** Active chain object; falls back to Base Sepolia if `VITE_CHAIN_ID` names an unsupported chain. */
 export const ACTIVE_CHAIN: Chain =
   SUPPORTED_CHAINS.find((chain) => chain.id === CHAIN_ID) ?? baseSepolia
+
+/** True when targeting Base mainnet — real tokens, no mocks, no faucet. */
+export const IS_MAINNET = CHAIN_ID === base.id
 
 /** RPC URL for the active chain — `VITE_RPC_URL`, defaulting per chain id. */
 export const RPC_URL: string =

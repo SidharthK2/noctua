@@ -1,33 +1,38 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans:
+    "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* KRWQ brand colors (krwq.cash) — cobalt primary, green success. */
+  --color-brand: #0047ab;
+  --color-success: #1c882d;
 }
 
-/* Dark-only theme — semantic tokens consumed by the shadcn-style components in
-   src/components/ui. No light mode, no theme toggle. */
+/* Light-only theme matching the KRWQ brand (krwq.cash): white page, warm-ivory cards,
+   cobalt-blue primary. Semantic tokens consumed by the shadcn-style components in
+   src/components/ui. No dark mode, no theme toggle. */
 :root {
-  color-scheme: dark;
-  --background: #09090b; /* zinc-950 */
-  --foreground: #f4f4f5; /* zinc-100 */
-  --card: #18181b; /* zinc-900 */
-  --card-foreground: #f4f4f5; /* zinc-100 */
-  --popover: #18181b; /* zinc-900 */
-  --popover-foreground: #f4f4f5; /* zinc-100 */
-  --primary: #10b981; /* emerald-500 */
-  --primary-foreground: #09090b; /* zinc-950 */
-  --secondary: #27272a; /* zinc-800 */
-  --secondary-foreground: #f4f4f5; /* zinc-100 */
-  --muted: #27272a; /* zinc-800 */
-  --muted-foreground: #a1a1aa; /* zinc-400 */
-  --accent: #27272a; /* zinc-800 */
-  --accent-foreground: #f4f4f5; /* zinc-100 */
-  --destructive: #f87171; /* red-400 */
-  --border: #27272a; /* zinc-800 */
-  --input: #27272a; /* zinc-800 */
-  --ring: rgb(16 185 129 / 0.4); /* emerald-500/40 */
-  --radius: 0.625rem;
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #141414;
+  --card: #f2f1ed; /* warm ivory */
+  --card-foreground: #141414;
+  --popover: #ffffff;
+  --popover-foreground: #141414;
+  --primary: #0047ab; /* KRWQ cobalt */
+  --primary-foreground: #ffffff;
+  --secondary: #f0ede6;
+  --secondary-foreground: #0047ab;
+  --muted: #f5f5f5;
+  --muted-foreground: #666666;
+  --accent: #f2f1ed;
+  --accent-foreground: #141414;
+  --destructive: #ef4444;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: rgb(0 71 171 / 0.4); /* cobalt/40 */
+  --radius: 1.25rem; /* KRWQ design system — soft, rounded surfaces */
 }
 
 @theme inline {
@@ -62,14 +67,14 @@
   body {
     @apply text-foreground font-sans;
     margin: 0;
-    /* flat zinc-950 with a barely-there emerald glow at the top — depth without gradients shouting */
+    /* flat white with a barely-there cobalt glow at the top — depth without gradients shouting */
     background:
-      radial-gradient(1100px 380px at 50% -12%, rgb(16 185 129 / 0.05), transparent 70%),
+      radial-gradient(1100px 380px at 50% -12%, rgb(0 71 171 / 0.04), transparent 70%),
       var(--background);
     background-attachment: fixed;
   }
   ::selection {
-    background: rgb(16 185 129 / 0.25);
+    background: rgb(0 71 171 / 0.18);
   }
   /* Tailwind v4 preflight leaves buttons with the default cursor; restore pointer affordance. */
   button:not(:disabled),
@@ -81,6 +86,6 @@
   }
   * {
     scrollbar-width: thin;
-    scrollbar-color: #3f3f46 transparent;
+    scrollbar-color: #d4d4d4 transparent;
   }
 }

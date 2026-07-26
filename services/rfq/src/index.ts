@@ -22,8 +22,12 @@ const watcher = new ChainWatcher(publicClient, config.noctuaAddress, store, {
 })
 watcher.start()
 
-const fromBlock = store.getCursor() ?? config.startBlock
-console.log(`watcher: polling ${config.rpcUrl} from block ${fromBlock}`)
+// Mirror the watcher's resume rule (cursor floored at startBlock) so the log tells the truth,
+// and log only the RPC origin — keyed provider URLs must not land in logs.
+const cursor = store.getCursor()
+const fromBlock =
+  cursor === undefined || cursor < config.startBlock ? config.startBlock : cursor + 1n
+console.log(`watcher: polling ${new URL(config.rpcUrl).origin} from block ${fromBlock}`)
 
 // The API mounts under /api; with STATIC_DIR set, the same process also serves the built
 // frontend (single origin — no CORS, matches the vite dev proxy's URL layout).

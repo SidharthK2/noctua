@@ -10,13 +10,13 @@ export type BadgeStatus =
   | "pending"
 
 const STATUS_CLASSES: Record<BadgeStatus, string> = {
-  open: "bg-zinc-500/10 text-zinc-300 border-zinc-500/20",
-  filled: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  withdrawn: "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
-  active: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  repaid: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  defaulted: "bg-red-500/10 text-red-400 border-red-500/20",
-  pending: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  open: "bg-neutral-500/10 text-neutral-700 border-neutral-500/20",
+  filled: "bg-success/10 text-success border-success/20",
+  withdrawn: "bg-neutral-500/10 text-neutral-500 border-neutral-500/20",
+  active: "bg-success/10 text-success border-success/20",
+  repaid: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+  defaulted: "bg-red-500/10 text-red-600 border-red-500/20",
+  pending: "bg-amber-500/10 text-amber-600 border-amber-500/20",
 }
 
 export function StatusBadge({ status, className }: { status: BadgeStatus; className?: string }) {

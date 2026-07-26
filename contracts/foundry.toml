@@ -10,9 +10,12 @@ remappings = [
 
 [rpc_endpoints]
 base_sepolia = "https://sepolia.base.org"
+# Override with a keyed endpoint via `--rpc-url <url>` or BASE_RPC_URL in contracts/.env.
+base = "${BASE_RPC_URL}"
 
 # Etherscan v2 — one key verifies on all chains; set ETHERSCAN_API_KEY in contracts/.env.
 [etherscan]
 base_sepolia = { key = "${ETHERSCAN_API_KEY}", chain = 84532 }
+base = { key = "${ETHERSCAN_API_KEY}", chain = 8453 }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

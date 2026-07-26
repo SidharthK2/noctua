@@ -11,13 +11,28 @@ const ANVIL_DEFAULTS = {
 } as const satisfies Record<string, Address>
 
 const ANVIL_CHAIN_ID = 31337
+const BASE_MAINNET_CHAIN_ID = 8453
 
-/** Loan asset is a mock USDT; collateral is mock WETH. Both use 18 decimals. Swapping either
- * asset in the future should only require touching this file. */
+/** Canonical token addresses on Base mainnet: the real KRWQ (krwq.cash) and canonical WETH.
+ * Used as loan/collateral defaults on chain 8453 — env vars still override, and the Noctua
+ * contract address always comes from the env. */
+const BASE_MAINNET_TOKEN_DEFAULTS: Partial<Record<keyof typeof ANVIL_DEFAULTS, Address>> = {
+  VITE_LOAN_ADDRESS: "0x370923D39f139C64813f173a1bf0b4f9Ba36a24f", // KRWQ
+  VITE_COLLATERAL_ADDRESS: "0x4200000000000000000000000000000000000006", // WETH
+}
+
+/** Loan asset is KRWQ — the Korean won stablecoin issued by Frax × IQ (krwq.cash), 18 on-chain
+ * decimals. On Base mainnet (8453) the real token is used; testnets and local anvil use a
+ * mintable mock instead. Collateral is WETH (canonical on mainnet, mock elsewhere). Swapping
+ * either asset in the future should only require touching this file.
+ *
+ * KRWQ displays won-style — whole units, no fractional digits. */
 export const LOAN_DECIMALS = 18
 export const COLLATERAL_DECIMALS = 18
-export const LOAN_SYMBOL = "USDT"
+export const LOAN_SYMBOL = "KRWQ"
 export const COLLATERAL_SYMBOL = "WETH"
+export const LOAN_DISPLAY_DECIMALS = 0
+export const COLLATERAL_DISPLAY_DECIMALS = 2
 
 export type ResolvedAddresses = {
   noctua: Address
@@ -52,15 +67,24 @@ function resolveAddresses(chainId: number): AddressConfigResult {
     }
   }
 
-  const missing = keys.filter((key) => !values[key])
+  // On Base mainnet the token addresses are known constants; only the Noctua deployment
+  // address must be configured explicitly.
+  const defaults = chainId === BASE_MAINNET_CHAIN_ID ? BASE_MAINNET_TOKEN_DEFAULTS : ({} as const)
+  const resolvedValues = {
+    VITE_NOCTUA_ADDRESS: values.VITE_NOCTUA_ADDRESS,
+    VITE_LOAN_ADDRESS: values.VITE_LOAN_ADDRESS ?? defaults.VITE_LOAN_ADDRESS,
+    VITE_COLLATERAL_ADDRESS: values.VITE_COLLATERAL_ADDRESS ?? defaults.VITE_COLLATERAL_ADDRESS,
+  }
+
+  const missing = keys.filter((key) => !resolvedValues[key])
   if (missing.length > 0) return { ok: false, missing }
 
   return {
     ok: true,
     addresses: {
-      noctua: values.VITE_NOCTUA_ADDRESS as Address,
-      loanAsset: values.VITE_LOAN_ADDRESS as Address,
-      collateralAsset: values.VITE_COLLATERAL_ADDRESS as Address,
+      noctua: resolvedValues.VITE_NOCTUA_ADDRESS as Address,
+      loanAsset: resolvedValues.VITE_LOAN_ADDRESS as Address,
+      collateralAsset: resolvedValues.VITE_COLLATERAL_ADDRESS as Address,
     },
   }
 }

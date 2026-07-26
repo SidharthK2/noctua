@@ -6,7 +6,14 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["packages/**", "services/**", "*.json", "!**/dist", "!**/*.lock"]
+    "includes": [
+      "packages/**",
+      "services/**",
+      "*.json",
+      "!**/dist",
+      "!**/*.lock",
+      "!services/web/public"
+    ]
   },
   "formatter": {
     "enabled": true,

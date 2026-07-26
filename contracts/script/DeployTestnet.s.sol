@@ -22,14 +22,16 @@ contract DeployTestnet is Script {
         vm.startBroadcast(deployerKey);
 
         Noctua noctua = new Noctua();
-        ERC20Mock usdt = new ERC20Mock("Noctua Mock USDT", "USDT", 18);
+        // Mock stand-in for KRWQ (the Korean won stablecoin, krwq.cash) — the real token is
+        // mainnet-only, so testnets get a mintable mock with the same symbol and decimals.
+        ERC20Mock krwq = new ERC20Mock("Noctua Mock KRWQ", "KRWQ", 18);
         ERC20Mock weth = new ERC20Mock("Noctua Mock WETH", "WETH", 18);
 
         vm.stopBroadcast();
 
         console.log("deployer        ", deployer);
         console.log("NOCTUA_ADDRESS     ", address(noctua));
-        console.log("LOAN_ADDRESS       ", address(usdt));
+        console.log("LOAN_ADDRESS       ", address(krwq));
         console.log("COLLATERAL_ADDRESS ", address(weth));
     }
 }

@@ -7,6 +7,7 @@ import {
   COLLATERAL_DECIMALS,
   COLLATERAL_SYMBOL,
   LOAN_DECIMALS,
+  LOAN_DISPLAY_DECIMALS,
   LOAN_SYMBOL,
 } from "../lib/addresses.js"
 import { formatAmount, formatAprPct, formatCountdown } from "../lib/format.js"
@@ -41,17 +42,17 @@ function AmountLine({
 }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-      <span className="font-mono text-base tabular-nums text-zinc-100">
-        {formatAmount(principal, LOAN_DECIMALS)}
+      <span className="font-mono text-base tabular-nums text-neutral-900">
+        {formatAmount(principal, LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}
       </span>
-      <span className="text-xs text-zinc-500">{LOAN_SYMBOL}</span>
-      <span className="text-zinc-700">·</span>
-      <span className="font-mono text-sm tabular-nums text-zinc-400">
+      <span className="text-xs text-neutral-500">{LOAN_SYMBOL}</span>
+      <span className="text-neutral-300">·</span>
+      <span className="font-mono text-sm tabular-nums text-neutral-600">
         {formatAmount(collateral, COLLATERAL_DECIMALS)}
       </span>
-      <span className="text-xs text-zinc-500">{COLLATERAL_SYMBOL} collateral</span>
-      <span className="text-zinc-700">·</span>
-      <span className="text-xs tabular-nums text-zinc-500">
+      <span className="text-xs text-neutral-500">{COLLATERAL_SYMBOL} collateral</span>
+      <span className="text-neutral-300">·</span>
+      <span className="text-xs tabular-nums text-neutral-500">
         matures in {formatCountdown(maturity, nowSec)}
       </span>
     </div>
@@ -70,7 +71,7 @@ function isInactive(detail: RfqDetail): boolean {
 }
 
 export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => void }) {
-  const [principalInput, setPrincipalInput] = useState("10000")
+  const [principalInput, setPrincipalInput] = useState("10000000")
   const [collateralInput, setCollateralInput] = useState("10")
   const [daysInput, setDaysInput] = useState("90")
   const [acceptedByRfqId, setAcceptedByRfqId] = useState<Record<string, QuoteWire>>({})
@@ -86,16 +87,16 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
 
   if (!isConnected || !address) {
     return (
-      <Card className="border-zinc-800/80 shadow-lg shadow-black/20">
-        <CardHeader className="border-b border-zinc-800/60 pb-4">
-          <CardTitle className="text-xs font-medium uppercase tracking-widest text-zinc-400">
+      <Card className="border-neutral-200 shadow-sm shadow-neutral-900/5">
+        <CardHeader className="border-b border-neutral-200 pb-4">
+          <CardTitle className="text-xs font-medium uppercase tracking-widest text-neutral-600">
             Borrower
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col items-center gap-2 py-12 text-center">
-            <MoonStar className="size-5 text-zinc-700" />
-            <p className="text-sm text-zinc-600">
+            <MoonStar className="size-5 text-neutral-300" />
+            <p className="text-sm text-neutral-400">
               Connect a wallet to post requests and manage loans.
             </p>
           </div>
@@ -164,7 +165,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
     return (
       <div
         key={detail.id}
-        className="flex flex-col gap-3 rounded-lg border border-zinc-800/70 p-4 transition-colors hover:border-zinc-800"
+        className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4 transition-colors hover:border-neutral-300"
       >
         <div className="flex items-center justify-between gap-2">
           <AmountLine
@@ -177,26 +178,31 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
         </div>
 
         {accepted && (
-          <div className="flex items-center gap-3 rounded-lg border border-zinc-800/60 bg-zinc-950/60 p-3 text-sm">
+          <div className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-white p-3 text-sm">
             {detail.loanStatus === null ? (
               <>
                 <StatusBadge status="pending" />
-                <span className="text-zinc-500">Awaiting chain confirmation…</span>
+                <span className="text-neutral-500">Awaiting chain confirmation…</span>
               </>
             ) : confirming ? (
               <>
                 <StatusBadge status="pending" />
-                <span className="flex items-center gap-2 text-zinc-500">
+                <span className="flex items-center gap-2 text-neutral-500">
                   <Loader2 className="size-3.5 animate-spin" /> Confirming repayment…
                 </span>
               </>
             ) : detail.loanStatus === "active" ? (
               <>
                 <StatusBadge status="active" />
-                <span className="flex-1 text-zinc-500">
+                <span className="flex-1 text-neutral-500">
                   Owes{" "}
-                  <span className="font-mono tabular-nums text-zinc-300">
-                    {formatAmount(BigInt(accepted.quote.repayment), LOAN_DECIMALS)} {LOAN_SYMBOL}
+                  <span className="font-mono tabular-nums text-neutral-700">
+                    {formatAmount(
+                      BigInt(accepted.quote.repayment),
+                      LOAN_DECIMALS,
+                      LOAN_DISPLAY_DECIMALS,
+                    )}{" "}
+                    {LOAN_SYMBOL}
                   </span>{" "}
                   by maturity
                 </span>
@@ -218,7 +224,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
             ) : (
               <>
                 <StatusBadge status={detail.loanStatus} />
-                <span className="text-zinc-500">{LOAN_STATUS_TEXT[detail.loanStatus]}</span>
+                <span className="text-neutral-500">{LOAN_STATUS_TEXT[detail.loanStatus]}</span>
               </>
             )}
           </div>
@@ -227,7 +233,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
         {!accepted && detail.status === "open" && (
           <Table>
             <TableHeader>
-              <TableRow className="border-zinc-800/50 hover:bg-transparent">
+              <TableRow className="border-neutral-200 hover:bg-transparent">
                 <TableHead className="h-8 text-right text-[0.65rem] uppercase tracking-wider">
                   Repayment
                 </TableHead>
@@ -254,16 +260,16 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
                 return (
                   <TableRow
                     key={qw.digest}
-                    className="border-zinc-800/50 transition-colors hover:bg-zinc-800/20"
+                    className="border-neutral-200 transition-colors hover:bg-neutral-900/5"
                   >
-                    <TableCell className="text-right font-mono tabular-nums text-zinc-200">
-                      {formatAmount(onchain.repayment, LOAN_DECIMALS)}{" "}
-                      <span className="text-zinc-500">{LOAN_SYMBOL}</span>
+                    <TableCell className="text-right font-mono tabular-nums text-neutral-800">
+                      {formatAmount(onchain.repayment, LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}{" "}
+                      <span className="text-neutral-500">{LOAN_SYMBOL}</span>
                     </TableCell>
-                    <TableCell className="text-right font-mono font-medium tabular-nums text-emerald-400">
+                    <TableCell className="text-right font-mono font-medium tabular-nums text-brand">
                       {apr}
                     </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums text-zinc-400">
+                    <TableCell className="text-right font-mono tabular-nums text-neutral-600">
                       {formatCountdown(onchain.expiry, nowSec)}
                     </TableCell>
                     <TableCell className="text-right">
@@ -286,10 +292,10 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
                 )
               })}
               {detail.quotes.length === 0 && (
-                <TableRow className="border-zinc-800/50 hover:bg-transparent">
+                <TableRow className="border-neutral-200 hover:bg-transparent">
                   <TableCell colSpan={4} className="py-6 text-center">
-                    <span className="inline-flex items-center gap-2 text-sm text-zinc-600">
-                      <span className="size-1.5 animate-pulse rounded-full bg-zinc-600" />
+                    <span className="inline-flex items-center gap-2 text-sm text-neutral-400">
+                      <span className="size-1.5 animate-pulse rounded-full bg-neutral-400" />
                       Waiting for quotes
                     </span>
                   </TableCell>
@@ -303,20 +309,20 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
   }
 
   return (
-    <Card className="border-zinc-800/80 shadow-lg shadow-black/20">
-      <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-zinc-800/60 pb-4">
-        <CardTitle className="text-xs font-medium uppercase tracking-widest text-zinc-400">
+    <Card className="border-neutral-200 shadow-sm shadow-neutral-900/5">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-neutral-200 pb-4">
+        <CardTitle className="text-xs font-medium uppercase tracking-widest text-neutral-600">
           Borrower
         </CardTitle>
         <AddressPill address={address} />
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <form
-          className="flex flex-wrap items-end gap-3 rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-4"
+          className="flex flex-wrap items-end gap-3 rounded-lg border border-neutral-200 bg-white p-4"
           onSubmit={onPostRfq}
         >
           <label
-            className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-zinc-500"
+            className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-neutral-500"
             htmlFor="rfq-principal"
           >
             Principal · {LOAN_SYMBOL}
@@ -328,7 +334,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
             />
           </label>
           <label
-            className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-zinc-500"
+            className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-neutral-500"
             htmlFor="rfq-collateral"
           >
             Collateral · {COLLATERAL_SYMBOL}
@@ -340,7 +346,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
             />
           </label>
           <label
-            className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-zinc-500"
+            className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-neutral-500"
             htmlFor="rfq-days"
           >
             Term · days
@@ -364,14 +370,14 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
 
         <div className="flex flex-col gap-3">
           {isLoading && (
-            <div className="flex items-center justify-center gap-2 py-12 text-sm text-zinc-600">
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-neutral-400">
               <Loader2 className="size-4 animate-spin" /> Loading requests…
             </div>
           )}
           {!isLoading && myRfqs.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-12 text-center">
-              <MoonStar className="size-5 text-zinc-700" />
-              <p className="text-sm text-zinc-600">No requests yet — post one above.</p>
+              <MoonStar className="size-5 text-neutral-300" />
+              <p className="text-sm text-neutral-400">No requests yet — post one above.</p>
             </div>
           )}
           {activeRfqs.map(renderRfqCard)}
@@ -381,7 +387,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
               <button
                 type="button"
                 onClick={() => setShowCompleted((v) => !v)}
-                className="flex items-center gap-1.5 self-start text-[0.65rem] font-medium uppercase tracking-widest text-zinc-500 transition-colors hover:text-zinc-300"
+                className="flex items-center gap-1.5 self-start text-[0.65rem] font-medium uppercase tracking-widest text-neutral-500 transition-colors hover:text-neutral-700"
               >
                 {showCompleted ? (
                   <ChevronDown className="size-3.5" />

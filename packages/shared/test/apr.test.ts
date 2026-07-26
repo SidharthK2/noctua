@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { WAD, impliedAprWad } from "../src/apr.js"
+import { impliedAprWad, WAD } from "../src/apr.js"
 import type { Quote } from "../src/types.js"
 
 const BASE: Quote = {

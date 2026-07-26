@@ -2,7 +2,7 @@
 # Deploys the demo contracts to a local anvil instance in a fixed order so their addresses match
 # the deterministic defaults baked into services/web/src/lib/addresses.ts:
 #   1. Noctua       -> 0x5FbDB2315678afecb367f032d93F642f64180aa3
-#   2. Mock USDT     -> 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+#   2. Mock KRWQ     -> 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
 #   3. Mock WETH     -> 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
 # Run this against a freshly started `anvil` (account #0 must be at nonce 0) from the repo root:
 #   ./services/web/scripts/deploy-demo.sh
@@ -35,24 +35,25 @@ deploy() {
 echo "==> Deploying Noctua"
 NOCTUA=$(deploy src/Noctua.sol:Noctua)
 
-echo "==> Deploying Mock USDT"
-USDT=$(deploy test/mocks/ERC20Mock.sol:ERC20Mock --constructor-args "Mock USDT" "USDT" 18)
+echo "==> Deploying Mock KRWQ"
+KRWQ=$(deploy test/mocks/ERC20Mock.sol:ERC20Mock --constructor-args "Mock KRWQ" "KRWQ" 18)
 
 echo "==> Deploying Mock WETH"
 WETH=$(deploy test/mocks/ERC20Mock.sol:ERC20Mock --constructor-args "Mock WETH" "WETH" 18)
 
 echo "==> Minting starter balances"
-cast send "$USDT" "mint(address,uint256)" "$MAKER_ADDRESS" 100000000000000000000000 \
+# KRW-scale amounts: maker gets ₩100,000,000 KRWQ, borrower gets 100 WETH + ₩5,000,000 KRWQ.
+cast send "$KRWQ" "mint(address,uint256)" "$MAKER_ADDRESS" 100000000000000000000000000 \
   --rpc-url "$RPC_URL" --private-key "$DEPLOYER_KEY" >/dev/null
 cast send "$WETH" "mint(address,uint256)" "$BORROWER_ADDRESS" 100000000000000000000 \
   --rpc-url "$RPC_URL" --private-key "$DEPLOYER_KEY" >/dev/null
-cast send "$USDT" "mint(address,uint256)" "$BORROWER_ADDRESS" 5000000000000000000000 \
+cast send "$KRWQ" "mint(address,uint256)" "$BORROWER_ADDRESS" 5000000000000000000000000 \
   --rpc-url "$RPC_URL" --private-key "$DEPLOYER_KEY" >/dev/null
 
 echo
 echo "==> Deployed addresses"
 echo "NOCTUA=$NOCTUA"
-echo "USDT=$USDT"
+echo "KRWQ=$KRWQ"
 echo "WETH=$WETH"
 echo
 echo "These should match the defaults in services/web/src/lib/addresses.ts. If they don't"

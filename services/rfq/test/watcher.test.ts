@@ -364,6 +364,30 @@ describe.each(storeFactories)("ChainWatcher (%s)", (_name, makeStore) => {
     expect(store.getCursor()).toBe(25n)
   })
 
+  it("ignores a persisted cursor below startBlock — no events exist before the deploy block", async () => {
+    // e.g. stale state left in the volume by a previous misconfigured deployment
+    store.setCursor(5n)
+    const ranges: Array<[bigint, bigint]> = []
+    const client = makeStubClient({
+      blockNumber: 120n,
+      logsByRange: (from, to) => {
+        ranges.push([from, to])
+        return []
+      },
+    })
+    const watcher = new ChainWatcher(client, NOCTUA_ADDRESS, store, {
+      pollIntervalMs: 1000,
+      confirmations: 0,
+      startBlock: 100,
+      maxBlockRange: 10_000,
+    })
+
+    await watcher.poll()
+
+    expect(ranges).toEqual([[100n, 120n]])
+    expect(store.getCursor()).toBe(120n)
+  })
+
   it("advances the cursor to latestBlock - confirmations", async () => {
     const client = makeStubClient({ blockNumber: 100n })
     const watcher = new ChainWatcher(client, NOCTUA_ADDRESS, store, {

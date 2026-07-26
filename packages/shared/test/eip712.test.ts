@@ -1,15 +1,15 @@
+import { encodeAbiParameters, keccak256, toHex } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
 import { describe, expect, it } from "vitest"
 import {
+  hashQuote,
   QUOTE_TYPE_STRING,
   QUOTE_TYPEHASH,
   type Quote,
-  hashQuote,
   quoteStructHash,
   signQuote,
   verifyQuoteSignature,
 } from "../src/index.js"
-import { encodeAbiParameters, keccak256, toHex } from "viem"
 
 const CHAIN_ID = 31337
 const VERIFYING_CONTRACT = "0x00000000000000000000000000000000000000AB" as const

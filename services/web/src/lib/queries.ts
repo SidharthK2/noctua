@@ -13,12 +13,12 @@ import {
   LOAN_DECIMALS,
   NOCTUA_ADDRESS,
 } from "./addresses.js"
-import { CHAIN_ID } from "./chain.js"
+import { CHAIN_ID, IS_MAINNET } from "./chain.js"
 import { parseUnits } from "./format.js"
 import { wireQuoteToOnchain } from "./quote.js"
 import type { StatusEvent } from "./status.js"
 
-const FAUCET_LOAN_AMOUNT = parseUnits("100000", LOAN_DECIMALS) // 100,000 USDT
+const FAUCET_LOAN_AMOUNT = parseUnits("100000000", LOAN_DECIMALS) // ₩100,000,000 KRWQ
 const FAUCET_COLLATERAL_AMOUNT = parseUnits("100", COLLATERAL_DECIMALS) // 100 WETH
 
 export type RfqDetail = RfqWire & { quotes: QuoteWire[] }
@@ -340,8 +340,9 @@ export function useSendQuoteMutation(onStatus: (event: StatusEvent) => void) {
   })
 }
 
-/** Faucet: mints 100,000 USDT and 100 WETH to the connected wallet via two txs (ERC20Mock.mint is
- * public). Testnet/demo only — never wire this up against a real token. */
+/** Faucet: mints ₩100,000,000 mock KRWQ and 100 WETH to the connected wallet via two txs
+ * (ERC20Mock.mint is public). Testnet/demo only — the real mainnet tokens have no public mint,
+ * so this is hard-disabled on chain 8453 (the UI also hides the button there). */
 export function useFaucetMutation(onStatus: (event: StatusEvent) => void) {
   const { address } = useAccount()
   const { data: walletClient } = useWalletClient()
@@ -349,16 +350,17 @@ export function useFaucetMutation(onStatus: (event: StatusEvent) => void) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async () => {
+      if (IS_MAINNET) throw new Error("faucet is testnet-only")
       if (!walletClient || !publicClient || !address) throw new Error("connect a wallet first")
 
-      const usdtHash = await walletClient.writeContract({
+      const krwqHash = await walletClient.writeContract({
         address: LOAN_ASSET_ADDRESS,
         abi: erc20Abi,
         functionName: "mint",
         args: [address, FAUCET_LOAN_AMOUNT],
       })
-      await publicClient.waitForTransactionReceipt({ hash: usdtHash })
-      onStatus({ kind: "tx", label: "minted 100,000 USDT", hash: usdtHash })
+      await publicClient.waitForTransactionReceipt({ hash: krwqHash })
+      onStatus({ kind: "tx", label: "minted ₩100,000,000 KRWQ", hash: krwqHash })
 
       const wethHash = await walletClient.writeContract({
         address: COLLATERAL_ASSET_ADDRESS,

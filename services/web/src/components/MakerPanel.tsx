@@ -6,6 +6,7 @@ import {
   COLLATERAL_DECIMALS,
   COLLATERAL_SYMBOL,
   LOAN_DECIMALS,
+  LOAN_DISPLAY_DECIMALS,
   LOAN_SYMBOL,
 } from "../lib/addresses.js"
 import { formatAmount, formatCountdown, formatUnits } from "../lib/format.js"
@@ -41,22 +42,22 @@ function AmountLine({
   const countdown = formatCountdown(maturity, nowSec)
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-      <span className="font-mono text-base tabular-nums text-zinc-100">
-        {formatAmount(principal, LOAN_DECIMALS)}
+      <span className="font-mono text-base tabular-nums text-neutral-900">
+        {formatAmount(principal, LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}
       </span>
-      <span className="text-xs text-zinc-500">{LOAN_SYMBOL}</span>
-      <span className="text-zinc-700">→</span>
-      <span className="font-mono text-sm tabular-nums text-zinc-300">
-        {formatAmount(repayment, LOAN_DECIMALS)}
+      <span className="text-xs text-neutral-500">{LOAN_SYMBOL}</span>
+      <span className="text-neutral-300">→</span>
+      <span className="font-mono text-sm tabular-nums text-neutral-700">
+        {formatAmount(repayment, LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}
       </span>
-      <span className="text-xs text-zinc-500">{LOAN_SYMBOL} owed</span>
-      <span className="text-zinc-700">·</span>
-      <span className="font-mono text-sm tabular-nums text-zinc-400">
+      <span className="text-xs text-neutral-500">{LOAN_SYMBOL} owed</span>
+      <span className="text-neutral-300">·</span>
+      <span className="font-mono text-sm tabular-nums text-neutral-600">
         {formatAmount(collateral, COLLATERAL_DECIMALS)}
       </span>
-      <span className="text-xs text-zinc-500">{COLLATERAL_SYMBOL} collateral</span>
-      <span className="text-zinc-700">·</span>
-      <span className="text-xs tabular-nums text-zinc-500">
+      <span className="text-xs text-neutral-500">{COLLATERAL_SYMBOL} collateral</span>
+      <span className="text-neutral-300">·</span>
+      <span className="text-xs tabular-nums text-neutral-500">
         {countdown === "expired" ? "past maturity" : `matures in ${countdown}`}
       </span>
     </div>
@@ -84,7 +85,7 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
   function startQuote(rfq: RfqWire) {
     setQuotingId(rfq.id)
     const defaultRepayment = (BigInt(rfq.principal) * 104n) / 100n
-    setRepaymentInput(formatUnits(defaultRepayment, LOAN_DECIMALS))
+    setRepaymentInput(formatUnits(defaultRepayment, LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS))
     setExpiryMinutesInput("60")
   }
 
@@ -124,7 +125,7 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
     return (
       <div
         key={detail.id}
-        className="flex flex-col gap-3 rounded-lg border border-zinc-800/70 p-4 transition-colors hover:border-zinc-800"
+        className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4 transition-colors hover:border-neutral-300"
       >
         <div className="flex items-center justify-between gap-2">
           <AmountLine
@@ -140,18 +141,18 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
           </div>
         </div>
 
-        <div className="flex items-center gap-3 rounded-lg border border-zinc-800/60 bg-zinc-950/60 p-3 text-sm">
+        <div className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-white p-3 text-sm">
           {confirming ? (
             <>
               <StatusBadge status="pending" />
-              <span className="flex items-center gap-2 text-zinc-500">
+              <span className="flex items-center gap-2 text-neutral-500">
                 <Loader2 className="size-3.5 animate-spin" /> Confirming default…
               </span>
             </>
           ) : detail.loanStatus === "active" ? (
             pastMaturity ? (
               <>
-                <span className="flex-1 text-zinc-500">Past maturity — repayment overdue.</span>
+                <span className="flex-1 text-neutral-500">Past maturity — repayment overdue.</span>
                 <Button
                   type="button"
                   size="sm"
@@ -169,10 +170,10 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
                 </Button>
               </>
             ) : (
-              <span className="text-zinc-500">Awaiting repayment</span>
+              <span className="text-neutral-500">Awaiting repayment</span>
             )
           ) : (
-            <span className="text-zinc-500">
+            <span className="text-neutral-500">
               {detail.loanStatus ? LOAN_STATUS_TEXT[detail.loanStatus] : "Awaiting repayment"}
             </span>
           )}
@@ -184,27 +185,27 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
   const connected = isConnected && !!address
 
   return (
-    <Card className="border-zinc-800/80 shadow-lg shadow-black/20">
-      <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-zinc-800/60 pb-4">
-        <CardTitle className="text-xs font-medium uppercase tracking-widest text-zinc-400">
+    <Card className="border-neutral-200 shadow-sm shadow-neutral-900/5">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-neutral-200 pb-4">
+        <CardTitle className="text-xs font-medium uppercase tracking-widest text-neutral-600">
           Maker
         </CardTitle>
         {connected ? (
           <AddressPill address={address} />
         ) : (
-          <span className="text-xs text-zinc-600">read-only — connect a wallet to quote</span>
+          <span className="text-xs text-neutral-400">read-only — connect a wallet to quote</span>
         )}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {isLoading && (
-          <div className="flex items-center justify-center gap-2 py-12 text-sm text-zinc-600">
+          <div className="flex items-center justify-center gap-2 py-12 text-sm text-neutral-400">
             <Loader2 className="size-4 animate-spin" /> Loading requests…
           </div>
         )}
         {!isLoading && openRfqs.length === 0 && (
           <div className="flex flex-col items-center gap-2 py-12 text-center">
-            <Inbox className="size-5 text-zinc-700" />
-            <p className="text-sm text-zinc-600">No open requests — waiting for borrowers.</p>
+            <Inbox className="size-5 text-neutral-300" />
+            <p className="text-sm text-neutral-400">No open requests — waiting for borrowers.</p>
           </div>
         )}
         {openRfqs.map((rfq) => {
@@ -212,21 +213,21 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
           return (
             <div
               key={rfq.id}
-              className="flex flex-col gap-3 rounded-lg border border-zinc-800/70 p-4 transition-colors hover:border-zinc-800"
+              className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4 transition-colors hover:border-neutral-300"
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                  <span className="font-mono text-base tabular-nums text-zinc-100">
-                    {formatAmount(BigInt(rfq.principal), LOAN_DECIMALS)}
+                  <span className="font-mono text-base tabular-nums text-neutral-900">
+                    {formatAmount(BigInt(rfq.principal), LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}
                   </span>
-                  <span className="text-xs text-zinc-500">{LOAN_SYMBOL}</span>
-                  <span className="text-zinc-700">·</span>
-                  <span className="font-mono text-sm tabular-nums text-zinc-400">
+                  <span className="text-xs text-neutral-500">{LOAN_SYMBOL}</span>
+                  <span className="text-neutral-300">·</span>
+                  <span className="font-mono text-sm tabular-nums text-neutral-600">
                     {formatAmount(BigInt(rfq.collateral), COLLATERAL_DECIMALS)}
                   </span>
-                  <span className="text-xs text-zinc-500">{COLLATERAL_SYMBOL} collateral</span>
-                  <span className="text-zinc-700">·</span>
-                  <span className="text-xs tabular-nums text-zinc-500">
+                  <span className="text-xs text-neutral-500">{COLLATERAL_SYMBOL} collateral</span>
+                  <span className="text-neutral-300">·</span>
+                  <span className="text-xs tabular-nums text-neutral-500">
                     {formatCountdown(BigInt(rfq.maturity), nowSec)} term
                   </span>
                 </div>
@@ -247,9 +248,9 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
               </div>
 
               {quotingId === rfq.id && (
-                <div className="flex flex-wrap items-end gap-3 rounded-lg border border-zinc-800/70 bg-zinc-950/60 p-4">
+                <div className="flex flex-wrap items-end gap-3 rounded-lg border border-neutral-200 bg-white p-4">
                   <label
-                    className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-zinc-500"
+                    className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-neutral-500"
                     htmlFor={`quote-repayment-${rfq.id}`}
                   >
                     Repayment · {LOAN_SYMBOL}
@@ -261,7 +262,7 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
                     />
                   </label>
                   <label
-                    className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-zinc-500"
+                    className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-neutral-500"
                     htmlFor={`quote-expiry-${rfq.id}`}
                   >
                     Expiry · minutes
@@ -291,7 +292,7 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
                       type="button"
                       size="sm"
                       variant="ghost"
-                      className="text-zinc-500 hover:text-zinc-300"
+                      className="text-neutral-500 hover:text-neutral-700"
                       onClick={() => setQuotingId(null)}
                     >
                       Cancel
@@ -305,7 +306,7 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
 
         {connected && myLoans.length > 0 && (
           <div className="flex flex-col gap-3 pt-2">
-            <span className="text-[0.65rem] font-medium uppercase tracking-widest text-zinc-500">
+            <span className="text-[0.65rem] font-medium uppercase tracking-widest text-neutral-500">
               My loans
             </span>
             {myLoans.map(renderLoanCard)}

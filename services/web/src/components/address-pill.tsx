@@ -22,8 +22,8 @@ export function AddressPill({ address, className }: { address: string; className
       onClick={copy}
       title={address}
       className={cn(
-        "inline-flex items-center rounded-full border border-zinc-800 bg-zinc-900 px-2 py-0.5 font-mono text-xs tabular-nums text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-100",
-        copied && "text-emerald-400 hover:text-emerald-400",
+        "inline-flex items-center rounded-full border border-neutral-200 bg-white px-2 py-0.5 font-mono text-xs tabular-nums text-neutral-600 transition-colors hover:border-neutral-300 hover:text-neutral-900",
+        copied && "text-success hover:text-success",
         className,
       )}
     >

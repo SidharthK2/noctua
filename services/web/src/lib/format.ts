@@ -2,17 +2,23 @@ const WAD = 1_000_000_000_000_000_000n
 
 const DISPLAY_DECIMALS = 2
 
-/** Renders a token amount with `decimals` on-chain decimals to a human string with 2 display
- * decimal places. Assumes `decimals >= 2`, true of every asset this app handles (USDT and WETH
- * both use 18). */
-export function formatUnits(value: bigint, decimals: number): string {
+/** Renders a token amount with `decimals` on-chain decimals to a human string with
+ * `displayDecimals` display decimal places. Pass 0 for whole-unit assets (KRWQ renders
+ * won-style, with no fractional digits); assumes `decimals >= displayDecimals`, true of every
+ * asset this app handles (KRWQ and WETH both use 18 on-chain). */
+export function formatUnits(
+  value: bigint,
+  decimals: number,
+  displayDecimals = DISPLAY_DECIMALS,
+): string {
   const unit = 10n ** BigInt(decimals)
   const negative = value < 0n
   const abs = negative ? -value : value
   const whole = abs / unit
-  const scale = 10n ** BigInt(decimals - DISPLAY_DECIMALS)
+  if (displayDecimals === 0) return `${negative ? "-" : ""}${whole.toString()}`
+  const scale = 10n ** BigInt(decimals - displayDecimals)
   const frac = (abs % unit) / scale
-  const fracStr = frac.toString().padStart(DISPLAY_DECIMALS, "0")
+  const fracStr = frac.toString().padStart(displayDecimals, "0")
   return `${negative ? "-" : ""}${whole.toString()}.${fracStr}`
 }
 
@@ -26,10 +32,16 @@ export function formatAprPct(aprWad: bigint): string {
   return `${negative ? "-" : ""}${whole.toString()}.${frac}%`
 }
 
-/** Like formatUnits, but with thousands separators for display (e.g. "10,000.00"). */
-export function formatAmount(value: bigint, decimals: number): string {
-  const [whole, frac] = formatUnits(value, decimals).split(".")
-  return `${BigInt(whole).toLocaleString("en-US")}.${frac}`
+/** Like formatUnits, but with thousands separators for display (e.g. "10,000.00", or
+ * "10,000,000" with `displayDecimals` 0). */
+export function formatAmount(
+  value: bigint,
+  decimals: number,
+  displayDecimals = DISPLAY_DECIMALS,
+): string {
+  const [whole, frac] = formatUnits(value, decimals, displayDecimals).split(".")
+  const grouped = BigInt(whole).toLocaleString("en-US")
+  return frac === undefined ? grouped : `${grouped}.${frac}`
 }
 
 /** Parses a human decimal string (e.g. "10000.5" or "10,000.5") into a `decimals`-scaled bigint. */

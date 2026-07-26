@@ -1,6 +1,6 @@
 import type { Address, Hex, PublicClient } from "viem"
-import { watcherAbi } from "./watcher-abi.js"
 import type { RfqStore } from "./store.js"
+import { watcherAbi } from "./watcher-abi.js"
 
 export type ChainWatcherOptions = {
   pollIntervalMs: number
@@ -58,7 +58,12 @@ export class ChainWatcher {
     try {
       const latest = await this.publicClient.getBlockNumber()
       const to = latest - this.confirmations
-      let from = (this.store.getCursor() ?? this.startBlock - 1n) + 1n
+      // Resume from the persisted cursor, but never from before startBlock: no events can exist
+      // before the contract's deploy block, and a stale cursor left behind by a previous
+      // misconfiguration (different chain or contract) must not trigger a pointless backfill.
+      const cursor = this.store.getCursor()
+      const floor = this.startBlock - 1n
+      let from = (cursor === undefined || cursor < floor ? floor : cursor) + 1n
 
       while (from <= to) {
         const chunkTo = from + this.maxBlockRange - 1n < to ? from + this.maxBlockRange - 1n : to

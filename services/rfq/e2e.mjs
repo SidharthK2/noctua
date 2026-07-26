@@ -1,9 +1,9 @@
 // End-to-end smoke test: RFQ service -> signed quote -> on-chain fill -> repay.
 import { readFileSync } from "node:fs"
+import { signQuote } from "@noctua/shared"
 import { createPublicClient, createWalletClient, http } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
 import { foundry } from "viem/chains"
-import { signQuote } from "@noctua/shared"
 
 const API = "http://localhost:3901/api"
 const NOCTUA = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
@@ -14,8 +14,12 @@ const OUT = "/Users/sid/repos/eth/noctua/contracts/out"
 const noctuaAbi = JSON.parse(readFileSync(`${OUT}/Noctua.sol/Noctua.json`, "utf8")).abi
 const erc20Abi = JSON.parse(readFileSync(`${OUT}/ERC20Mock.sol/ERC20Mock.json`, "utf8")).abi
 
-const maker = privateKeyToAccount("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
-const borrower = privateKeyToAccount("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d")
+const maker = privateKeyToAccount(
+  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+)
+const borrower = privateKeyToAccount(
+  "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+)
 const pub = createPublicClient({ chain: foundry, transport: http() })
 const wallets = {
   maker: createWalletClient({ account: maker, chain: foundry, transport: http() }),
@@ -72,7 +76,10 @@ assert(rfq.id && rfq.status === "open", `RFQ posted (id ${rfq.id})`)
 
 // 2. maker discovers it and responds with a signed quote
 const open = await api("GET", "/rfqs?status=open")
-assert(open.some((r) => r.id === rfq.id), "RFQ visible in open list")
+assert(
+  open.some((r) => r.id === rfq.id),
+  "RFQ visible in open list",
+)
 const quote = {
   maker: maker.address,
   taker: borrower.address,
@@ -90,7 +97,10 @@ const submitted = await api("POST", `/rfqs/${rfq.id}/quotes`, {
   ...Object.fromEntries(Object.entries(quote).map(([k, v]) => [k, v.toString()])),
   signature,
 })
-assert(submitted.digest || submitted.quoteHash || submitted.hash, "service accepted the signed quote")
+assert(
+  submitted.digest || submitted.quoteHash || submitted.hash,
+  "service accepted the signed quote",
+)
 
 // tampered signature must be rejected
 const badSig = signature.slice(0, -2) + (signature.endsWith("00") ? "01" : "00")
@@ -129,12 +139,31 @@ const borrowerLoanBefore = await bal(LOAN, borrower.address)
 const borrowerCollBefore = await bal(COLL, borrower.address)
 const escrowBefore = await bal(COLL, NOCTUA)
 await tx("borrower", NOCTUA, noctuaAbi, "fill", [onchainQuote, q.signature])
-assert((await bal(LOAN, borrower.address)) - borrowerLoanBefore === principal, "fill: borrower received principal")
-assert((await bal(COLL, NOCTUA)) - escrowBefore === collateral, "fill: collateral escrowed in Noctua")
+assert(
+  (await bal(LOAN, borrower.address)) - borrowerLoanBefore === principal,
+  "fill: borrower received principal",
+)
+assert(
+  (await bal(COLL, NOCTUA)) - escrowBefore === collateral,
+  "fill: collateral escrowed in Noctua",
+)
 
-const quoteHash = await pub.readContract({ address: NOCTUA, abi: noctuaAbi, functionName: "hashQuote", args: [onchainQuote] })
-let loan = await pub.readContract({ address: NOCTUA, abi: noctuaAbi, functionName: "loans", args: [quoteHash] })
-assert(loan[0].toLowerCase() === borrower.address.toLowerCase() && loan[1] === 1, "loan Active with correct borrower")
+const quoteHash = await pub.readContract({
+  address: NOCTUA,
+  abi: noctuaAbi,
+  functionName: "hashQuote",
+  args: [onchainQuote],
+})
+let loan = await pub.readContract({
+  address: NOCTUA,
+  abi: noctuaAbi,
+  functionName: "loans",
+  args: [quoteHash],
+})
+assert(
+  loan[0].toLowerCase() === borrower.address.toLowerCase() && loan[1] === 1,
+  "loan Active with correct borrower",
+)
 
 // 5. the chain watcher observes the Filled event and closes the RFQ itself — no client call.
 const expectedDigest = await pub.readContract({
@@ -157,9 +186,20 @@ assert(!!watched.fillTxHash, "RFQ records the fill transaction hash")
 // 6. repay before maturity
 const makerLoanBefore = await bal(LOAN, maker.address)
 await tx("borrower", NOCTUA, noctuaAbi, "repay", [onchainQuote])
-assert((await bal(LOAN, maker.address)) - makerLoanBefore === repayment, "repay: maker received full repayment")
-assert((await bal(COLL, borrower.address)) === borrowerCollBefore, "repay: collateral returned to borrower")
-loan = await pub.readContract({ address: NOCTUA, abi: noctuaAbi, functionName: "loans", args: [quoteHash] })
+assert(
+  (await bal(LOAN, maker.address)) - makerLoanBefore === repayment,
+  "repay: maker received full repayment",
+)
+assert(
+  (await bal(COLL, borrower.address)) === borrowerCollBefore,
+  "repay: collateral returned to borrower",
+)
+loan = await pub.readContract({
+  address: NOCTUA,
+  abi: noctuaAbi,
+  functionName: "loans",
+  args: [quoteHash],
+})
 assert(loan[1] === 2, "loan status Repaid")
 
 // the watcher observes the Repaid event and flips the RFQ's loanStatus itself — no client call.
@@ -214,6 +254,11 @@ while (Date.now() < cancelDeadline) {
   if (listedAfterCancel.length === 0) break
   await new Promise((r) => setTimeout(r, 300))
 }
-assert(listedAfterCancel.length === 0, "watcher observed Cancelled and removed the quote from listing")
+assert(
+  listedAfterCancel.length === 0,
+  "watcher observed Cancelled and removed the quote from listing",
+)
 
-console.log("\nE2E PASS: RFQ -> signed quote -> on-chain fill -> repay, plus watcher-driven close/cancel, all assertions green")
+console.log(
+  "\nE2E PASS: RFQ -> signed quote -> on-chain fill -> repay, plus watcher-driven close/cancel, all assertions green",
+)
