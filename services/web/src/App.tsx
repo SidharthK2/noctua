@@ -1,18 +1,18 @@
 import { ConnectButton } from "@rainbow-me/rainbowkit"
 import { Loader2 } from "lucide-react"
-import { useState } from "react"
+import { Toaster } from "sonner"
 import { useAccount } from "wagmi"
-import { AddressPill } from "./components/address-pill.js"
 import { BorrowerPanel } from "./components/BorrowerPanel.js"
 import { MakerPanel } from "./components/MakerPanel.js"
-import { StatusStrip } from "./components/StatusStrip.js"
 import { Button } from "./components/ui/button.js"
 import { addressConfigResult, NOCTUA_ADDRESS } from "./lib/addresses.js"
 import { ACTIVE_CHAIN, IS_MAINNET } from "./lib/chain.js"
 import { useFaucetMutation } from "./lib/queries.js"
-import type { StatusEvent } from "./lib/status.js"
+import { notifyStatus } from "./lib/status.js"
 
-/** Rendered instead of the app when the active chain isn't 31337 (anvil) and any of the four
+const EXPLORER_URL = ACTIVE_CHAIN.blockExplorers?.default.url
+
+/** Rendered instead of the app when the active chain isn't 31337 (anvil) and any of the
  * `VITE_*` contract address env vars are missing — anvil defaults only apply locally. */
 function ConfigErrorPage({ missing }: { missing: string[] }) {
   return (
@@ -34,9 +34,9 @@ function ConfigErrorPage({ missing }: { missing: string[] }) {
   )
 }
 
-function FaucetButton({ onStatus }: { onStatus: (event: StatusEvent) => void }) {
+function FaucetButton() {
   const { isConnected } = useAccount()
-  const faucet = useFaucetMutation(onStatus)
+  const faucet = useFaucetMutation(notifyStatus)
 
   // Mainnet uses the real KRWQ and WETH — there is nothing to mint.
   if (IS_MAINNET || !isConnected) return null
@@ -56,16 +56,75 @@ function FaucetButton({ onStatus }: { onStatus: (event: StatusEvent) => void }) 
   )
 }
 
+/** First-visit landing moment: what this is and why to trust it, with the connect CTA.
+ * The open request book stays browsable below — it's public data. */
+function Hero() {
+  return (
+    <section className="border-b border-neutral-200 px-6 py-14 text-center">
+      <h2 className="mx-auto max-w-2xl text-4xl font-semibold tracking-tight text-neutral-900">
+        The digital won, lent at fixed rates.
+      </h2>
+      <p className="mx-auto mt-4 max-w-xl text-base text-neutral-500">
+        Borrowers post requests, lenders answer with signed quotes, and the winning terms are
+        escrowed and enforced on Base — repay by maturity or the collateral settles the debt.
+      </p>
+      <div className="mt-7 flex justify-center">
+        <ConnectButton label="Connect a wallet to start" showBalance={false} />
+      </div>
+      <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+        {["Fixed rate, fixed maturity", "Oracle-free by design", "Built on KRWQ by Frax × IQ"].map(
+          (chip) => (
+            <span
+              key={chip}
+              className="rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs text-neutral-600"
+            >
+              {chip}
+            </span>
+          ),
+        )}
+      </div>
+    </section>
+  )
+}
+
+function Footer() {
+  return (
+    <footer className="mt-auto flex flex-wrap items-center justify-between gap-x-8 gap-y-2 border-t border-neutral-200 px-6 py-4 text-xs text-neutral-500">
+      <span>Noctua — fixed-rate credit in KRWQ, the digital won · {ACTIVE_CHAIN.name}</span>
+      <div className="flex items-center gap-4">
+        <a
+          href="https://www.krwq.cash"
+          target="_blank"
+          rel="noreferrer"
+          className="transition-colors hover:text-neutral-900"
+        >
+          KRWQ ↗
+        </a>
+        {EXPLORER_URL && (
+          <a
+            href={`${EXPLORER_URL}/address/${NOCTUA_ADDRESS}`}
+            target="_blank"
+            rel="noreferrer"
+            className="transition-colors hover:text-neutral-900"
+          >
+            Contract ↗
+          </a>
+        )}
+      </div>
+    </footer>
+  )
+}
+
 export function App() {
-  const [lastEvent, setLastEvent] = useState<StatusEvent | null>(null)
+  const { isConnected } = useAccount()
 
   if (!addressConfigResult.ok) {
     return <ConfigErrorPage missing={addressConfigResult.missing} />
   }
 
   return (
-    <div className="flex min-h-screen flex-col pb-20">
-      <header className="flex items-center justify-between gap-4 border-b border-neutral-200 px-6 py-4">
+    <div className="flex min-h-screen flex-col">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-200 px-6 py-4">
         <div className="flex items-center gap-3">
           <img src="/brand/krwq-symbol.svg" alt="KRWQ" className="h-8 w-auto" />
           <div>
@@ -74,20 +133,28 @@ export function App() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <FaucetButton onStatus={setLastEvent} />
-          <AddressPill address={NOCTUA_ADDRESS} />
-          {/* RainbowKit owns connect/disconnect, account modal, and the wrong-network state
+          <FaucetButton />
+          {/* RainbowKit owns connect/disconnect, the account modal, and the wrong-network state
               (its chain chip turns red and opens the switch modal). */}
           <ConnectButton showBalance={false} chainStatus="icon" accountStatus="address" />
         </div>
       </header>
 
-      <main className="mx-auto grid w-full max-w-screen-2xl flex-1 grid-cols-1 items-start gap-6 p-6 lg:grid-cols-2">
-        <MakerPanel onStatus={setLastEvent} />
-        <BorrowerPanel onStatus={setLastEvent} />
+      {!isConnected && <Hero />}
+
+      <main
+        className={
+          isConnected
+            ? "mx-auto grid w-full max-w-screen-2xl flex-1 grid-cols-1 items-start gap-6 p-6 lg:grid-cols-2"
+            : "mx-auto w-full max-w-3xl flex-1 p-6"
+        }
+      >
+        <MakerPanel onStatus={notifyStatus} />
+        {isConnected && <BorrowerPanel onStatus={notifyStatus} />}
       </main>
 
-      <StatusStrip lastEvent={lastEvent} />
+      <Footer />
+      <Toaster position="bottom-right" theme="light" />
     </div>
   )
 }

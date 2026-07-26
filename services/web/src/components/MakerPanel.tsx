@@ -7,12 +7,12 @@ import {
   COLLATERAL_SYMBOL,
   LOAN_DECIMALS,
   LOAN_DISPLAY_DECIMALS,
-  LOAN_SYMBOL,
 } from "../lib/addresses.js"
 import { ACTIVE_CHAIN, CHAIN_ID } from "../lib/chain.js"
-import { formatAmount, formatCountdown, formatUnits } from "../lib/format.js"
+import { formatAmount, formatCountdown, formatDate, formatUnits } from "../lib/format.js"
 import type { RfqDetail } from "../lib/queries.js"
 import {
+  useBalances,
   useClaimDefaultMutation,
   useMakerLoans,
   useOpenRfqs,
@@ -44,14 +44,13 @@ function AmountLine({
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
       <span className="font-mono text-base tabular-nums text-neutral-900">
-        {formatAmount(principal, LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}
+        ₩{formatAmount(principal, LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}
       </span>
-      <span className="text-xs text-neutral-500">{LOAN_SYMBOL}</span>
       <span className="text-neutral-300">→</span>
       <span className="font-mono text-sm tabular-nums text-neutral-700">
-        {formatAmount(repayment, LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}
+        ₩{formatAmount(repayment, LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}
       </span>
-      <span className="text-xs text-neutral-500">{LOAN_SYMBOL} owed</span>
+      <span className="text-xs text-neutral-500">owed</span>
       <span className="text-neutral-300">·</span>
       <span className="font-mono text-sm tabular-nums text-neutral-600">
         {formatAmount(collateral, COLLATERAL_DECIMALS)}
@@ -59,7 +58,9 @@ function AmountLine({
       <span className="text-xs text-neutral-500">{COLLATERAL_SYMBOL} collateral</span>
       <span className="text-neutral-300">·</span>
       <span className="text-xs tabular-nums text-neutral-500">
-        {countdown === "expired" ? "past maturity" : `matures in ${countdown}`}
+        {countdown === "expired"
+          ? "past maturity"
+          : `matures ${formatDate(maturity)} · ${countdown}`}
       </span>
     </div>
   )
@@ -80,6 +81,7 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
 
   const { data: openRfqs = [], isLoading } = useOpenRfqs()
   const { data: myLoans = [] } = useMakerLoans()
+  const { data: balances } = useBalances()
   const sendQuote = useSendQuoteMutation(onStatus)
   const claimDefault = useClaimDefaultMutation(onStatus)
 
@@ -192,9 +194,12 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
   return (
     <Card className="border-neutral-200 shadow-sm shadow-neutral-900/5">
       <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-neutral-200 pb-4">
-        <CardTitle className="text-xs font-medium uppercase tracking-widest text-neutral-600">
-          Maker
-        </CardTitle>
+        <div>
+          <CardTitle className="text-xs font-medium uppercase tracking-widest text-neutral-600">
+            Lend
+          </CardTitle>
+          <p className="mt-1 text-xs text-neutral-400">Quote open requests · earn a fixed rate</p>
+        </div>
         {connected ? (
           <AddressPill address={address} />
         ) : (
@@ -215,7 +220,9 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
         {!isLoading && openRfqs.length === 0 && (
           <div className="flex flex-col items-center gap-2 py-12 text-center">
             <Inbox className="size-5 text-neutral-300" />
-            <p className="text-sm text-neutral-400">No open requests — waiting for borrowers.</p>
+            <p className="text-sm text-neutral-400">
+              No open requests yet. Borrowers post here — quotes compete on rate.
+            </p>
           </div>
         )}
         {openRfqs.map((rfq) => {
@@ -228,9 +235,8 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
               <div className="flex items-center justify-between gap-2">
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                   <span className="font-mono text-base tabular-nums text-neutral-900">
-                    {formatAmount(BigInt(rfq.principal), LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}
+                    ₩{formatAmount(BigInt(rfq.principal), LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}
                   </span>
-                  <span className="text-xs text-neutral-500">{LOAN_SYMBOL}</span>
                   <span className="text-neutral-300">·</span>
                   <span className="font-mono text-sm tabular-nums text-neutral-600">
                     {formatAmount(BigInt(rfq.collateral), COLLATERAL_DECIMALS)}
@@ -269,7 +275,7 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
                     className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-neutral-500"
                     htmlFor={`quote-repayment-${rfq.id}`}
                   >
-                    Repayment · {LOAN_SYMBOL}
+                    Repayment · ₩
                     <Input
                       id={`quote-repayment-${rfq.id}`}
                       className="w-32 text-right font-mono tabular-nums"
@@ -289,6 +295,12 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
                       onChange={(e) => setExpiryMinutesInput(e.target.value)}
                     />
                   </label>
+                  <span className="pb-2 text-xs text-neutral-400">
+                    You fund ₩
+                    {formatAmount(BigInt(rfq.principal), LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}
+                    {balances &&
+                      ` · balance ₩${formatAmount(balances.walletLoan, LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}`}
+                  </span>
                   <div className="flex gap-2">
                     <Button
                       type="button"

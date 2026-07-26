@@ -8,12 +8,12 @@ import {
   COLLATERAL_SYMBOL,
   LOAN_DECIMALS,
   LOAN_DISPLAY_DECIMALS,
-  LOAN_SYMBOL,
 } from "../lib/addresses.js"
-import { formatAmount, formatAprPct, formatCountdown } from "../lib/format.js"
+import { formatAmount, formatAprPct, formatCountdown, formatDate } from "../lib/format.js"
 import type { RfqDetail } from "../lib/queries.js"
 import {
   useAcceptQuoteMutation,
+  useBalances,
   useMyRfqs,
   usePostRfqMutation,
   useRepayLoanMutation,
@@ -43,9 +43,8 @@ function AmountLine({
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
       <span className="font-mono text-base tabular-nums text-neutral-900">
-        {formatAmount(principal, LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}
+        ₩{formatAmount(principal, LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}
       </span>
-      <span className="text-xs text-neutral-500">{LOAN_SYMBOL}</span>
       <span className="text-neutral-300">·</span>
       <span className="font-mono text-sm tabular-nums text-neutral-600">
         {formatAmount(collateral, COLLATERAL_DECIMALS)}
@@ -53,7 +52,7 @@ function AmountLine({
       <span className="text-xs text-neutral-500">{COLLATERAL_SYMBOL} collateral</span>
       <span className="text-neutral-300">·</span>
       <span className="text-xs tabular-nums text-neutral-500">
-        matures in {formatCountdown(maturity, nowSec)}
+        matures {formatDate(maturity)} · {formatCountdown(maturity, nowSec)}
       </span>
     </div>
   )
@@ -81,6 +80,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
   const { address, isConnected } = useAccount()
 
   const { data: myRfqs = [], isLoading } = useMyRfqs()
+  const { data: balances } = useBalances()
   const postRfq = usePostRfqMutation(onStatus)
   const acceptQuote = useAcceptQuoteMutation(onStatus)
   const repayLoan = useRepayLoanMutation(onStatus)
@@ -197,12 +197,12 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
                 <span className="flex-1 text-neutral-500">
                   Owes{" "}
                   <span className="font-mono tabular-nums text-neutral-700">
+                    ₩
                     {formatAmount(
                       BigInt(accepted.quote.repayment),
                       LOAN_DECIMALS,
                       LOAN_DISPLAY_DECIMALS,
-                    )}{" "}
-                    {LOAN_SYMBOL}
+                    )}
                   </span>{" "}
                   by maturity
                 </span>
@@ -263,8 +263,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
                     className="border-neutral-200 transition-colors hover:bg-neutral-900/5"
                   >
                     <TableCell className="text-right font-mono tabular-nums text-neutral-800">
-                      {formatAmount(onchain.repayment, LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}{" "}
-                      <span className="text-neutral-500">{LOAN_SYMBOL}</span>
+                      ₩{formatAmount(onchain.repayment, LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)}
                     </TableCell>
                     <TableCell className="text-right font-mono font-medium tabular-nums text-brand">
                       {apr}
@@ -311,9 +310,12 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
   return (
     <Card className="border-neutral-200 shadow-sm shadow-neutral-900/5">
       <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-neutral-200 pb-4">
-        <CardTitle className="text-xs font-medium uppercase tracking-widest text-neutral-600">
-          Borrower
-        </CardTitle>
+        <div>
+          <CardTitle className="text-xs font-medium uppercase tracking-widest text-neutral-600">
+            Borrow
+          </CardTitle>
+          <p className="mt-1 text-xs text-neutral-400">Post a request · take the best quote</p>
+        </div>
         <AddressPill address={address} />
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -325,7 +327,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
             className="flex flex-col gap-1.5 text-[0.65rem] uppercase tracking-wider text-neutral-500"
             htmlFor="rfq-principal"
           >
-            Principal · {LOAN_SYMBOL}
+            Principal · ₩
             <Input
               id="rfq-principal"
               className="w-32 text-right font-mono tabular-nums"
@@ -363,9 +365,15 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
                 <Loader2 className="size-3.5 animate-spin" /> Posting
               </>
             ) : (
-              "Post RFQ"
+              "Post request"
             )}
           </Button>
+          {balances && (
+            <span className="basis-full text-xs text-neutral-400">
+              Wallet: ₩{formatAmount(balances.walletLoan, LOAN_DECIMALS, LOAN_DISPLAY_DECIMALS)} ·{" "}
+              {formatAmount(balances.walletColl, COLLATERAL_DECIMALS)} {COLLATERAL_SYMBOL}
+            </span>
+          )}
         </form>
 
         <div className="flex flex-col gap-3">

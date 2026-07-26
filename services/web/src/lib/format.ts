@@ -53,6 +53,15 @@ export function parseUnits(input: string, decimals: number): bigint {
   return BigInt(whole) * 10n ** BigInt(decimals) + BigInt(paddedFrac || "0")
 }
 
+/** Formats a unix-seconds timestamp as a short absolute date, e.g. "Oct 24, 2026". */
+export function formatDate(tsSeconds: bigint): string {
+  return new Date(Number(tsSeconds) * 1000).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
+
 /** Formats seconds remaining until `targetSeconds` as a short countdown string. */
 export function formatCountdown(targetSeconds: bigint, nowSeconds: bigint): string {
   const remaining = targetSeconds - nowSeconds
