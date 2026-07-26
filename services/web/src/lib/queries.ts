@@ -13,7 +13,7 @@ import {
   LOAN_DECIMALS,
   NOCTUA_ADDRESS,
 } from "./addresses.js"
-import { CHAIN_ID, IS_MAINNET } from "./chain.js"
+import { ACTIVE_CHAIN, CHAIN_ID, IS_MAINNET } from "./chain.js"
 import { parseUnits } from "./format.js"
 import { wireQuoteToOnchain } from "./quote.js"
 import type { StatusEvent } from "./status.js"
@@ -98,7 +98,7 @@ export type Balances = {
 /** Connected wallet + Noctua escrow token balances shown in the bottom status bar. */
 export function useBalances() {
   const { address } = useAccount()
-  const publicClient = usePublicClient()
+  const publicClient = usePublicClient({ chainId: CHAIN_ID })
   return useQuery({
     queryKey: queryKeys.balances(address),
     queryFn: async (): Promise<Balances> => {
@@ -124,10 +124,20 @@ export function useBalances() {
   })
 }
 
+/** Error for actions that need the wallet on the active chain. `useWalletClient` is pinned to
+ * `CHAIN_ID`, so it returns nothing while the wallet sits on another chain — name the actual
+ * problem instead of claiming the user isn't connected. */
+function walletNotReadyError(walletChainId: number | undefined): Error {
+  if (walletChainId !== undefined && walletChainId !== CHAIN_ID) {
+    return new Error(`wrong network — switch your wallet to ${ACTIVE_CHAIN.name}`)
+  }
+  return new Error("connect a wallet first")
+}
+
 /** Posts a new RFQ as the connected wallet. */
 export function usePostRfqMutation(onStatus: (event: StatusEvent) => void) {
   const { address } = useAccount()
-  const publicClient = usePublicClient()
+  const publicClient = usePublicClient({ chainId: CHAIN_ID })
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: {
@@ -160,13 +170,13 @@ export function usePostRfqMutation(onStatus: (event: StatusEvent) => void) {
 
 /** Accept flow: approve collateral, then fill the quote on-chain via the connected wallet. */
 export function useAcceptQuoteMutation(onStatus: (event: StatusEvent) => void) {
-  const { address } = useAccount()
-  const { data: walletClient } = useWalletClient()
-  const publicClient = usePublicClient()
+  const { address, chainId: walletChainId } = useAccount()
+  const { data: walletClient } = useWalletClient({ chainId: CHAIN_ID })
+  const publicClient = usePublicClient({ chainId: CHAIN_ID })
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ rfqId, quoteWire }: { rfqId: string; quoteWire: QuoteWire }) => {
-      if (!walletClient || !publicClient) throw new Error("connect a wallet first")
+      if (!walletClient || !publicClient) throw walletNotReadyError(walletChainId)
       const onchain = wireQuoteToOnchain(quoteWire.quote)
 
       const approveHash = await walletClient.writeContract({
@@ -204,13 +214,13 @@ export function useAcceptQuoteMutation(onStatus: (event: StatusEvent) => void) {
 
 /** Repay flow: approve repayment amount, then repay the loan on-chain via the connected wallet. */
 export function useRepayLoanMutation(onStatus: (event: StatusEvent) => void) {
-  const { address } = useAccount()
-  const { data: walletClient } = useWalletClient()
-  const publicClient = usePublicClient()
+  const { address, chainId: walletChainId } = useAccount()
+  const { data: walletClient } = useWalletClient({ chainId: CHAIN_ID })
+  const publicClient = usePublicClient({ chainId: CHAIN_ID })
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ rfqId: _rfqId, quoteWire }: { rfqId: string; quoteWire: QuoteWire }) => {
-      if (!walletClient || !publicClient) throw new Error("connect a wallet first")
+      if (!walletClient || !publicClient) throw walletNotReadyError(walletChainId)
       const onchain = wireQuoteToOnchain(quoteWire.quote)
 
       const approveHash = await walletClient.writeContract({
@@ -246,13 +256,13 @@ export function useRepayLoanMutation(onStatus: (event: StatusEvent) => void) {
 /** Claim-default flow: the maker's only enforcement right. Moves escrowed collateral straight to
  * the maker, so unlike fill/repay there's no approve step. */
 export function useClaimDefaultMutation(onStatus: (event: StatusEvent) => void) {
-  const { address } = useAccount()
-  const { data: walletClient } = useWalletClient()
-  const publicClient = usePublicClient()
+  const { address, chainId: walletChainId } = useAccount()
+  const { data: walletClient } = useWalletClient({ chainId: CHAIN_ID })
+  const publicClient = usePublicClient({ chainId: CHAIN_ID })
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ rfqId: _rfqId, quoteWire }: { rfqId: string; quoteWire: QuoteWire }) => {
-      if (!walletClient || !publicClient) throw new Error("connect a wallet first")
+      if (!walletClient || !publicClient) throw walletNotReadyError(walletChainId)
       const onchain = wireQuoteToOnchain(quoteWire.quote)
 
       const claimHash = await walletClient.writeContract({
@@ -279,9 +289,9 @@ export function useClaimDefaultMutation(onStatus: (event: StatusEvent) => void) 
 /** Sign & send flow: maxUint256-approve the loan asset once, then sign (EIP-712, via wallet
  * popup) and submit a quote as the connected wallet. */
 export function useSendQuoteMutation(onStatus: (event: StatusEvent) => void) {
-  const { address } = useAccount()
-  const { data: walletClient } = useWalletClient()
-  const publicClient = usePublicClient()
+  const { address, chainId: walletChainId } = useAccount()
+  const { data: walletClient } = useWalletClient({ chainId: CHAIN_ID })
+  const publicClient = usePublicClient({ chainId: CHAIN_ID })
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({
@@ -293,7 +303,7 @@ export function useSendQuoteMutation(onStatus: (event: StatusEvent) => void) {
       repaymentInput: string
       expiryMinutesInput: string
     }) => {
-      if (!walletClient || !publicClient || !address) throw new Error("connect a wallet first")
+      if (!walletClient || !publicClient || !address) throw walletNotReadyError(walletChainId)
 
       const approveHash = await walletClient.writeContract({
         address: rfq.loanAsset,
@@ -344,14 +354,14 @@ export function useSendQuoteMutation(onStatus: (event: StatusEvent) => void) {
  * (ERC20Mock.mint is public). Testnet/demo only — the real mainnet tokens have no public mint,
  * so this is hard-disabled on chain 8453 (the UI also hides the button there). */
 export function useFaucetMutation(onStatus: (event: StatusEvent) => void) {
-  const { address } = useAccount()
-  const { data: walletClient } = useWalletClient()
-  const publicClient = usePublicClient()
+  const { address, chainId: walletChainId } = useAccount()
+  const { data: walletClient } = useWalletClient({ chainId: CHAIN_ID })
+  const publicClient = usePublicClient({ chainId: CHAIN_ID })
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async () => {
       if (IS_MAINNET) throw new Error("faucet is testnet-only")
-      if (!walletClient || !publicClient || !address) throw new Error("connect a wallet first")
+      if (!walletClient || !publicClient || !address) throw walletNotReadyError(walletChainId)
 
       const krwqHash = await walletClient.writeContract({
         address: LOAN_ASSET_ADDRESS,

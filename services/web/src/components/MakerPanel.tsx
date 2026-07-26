@@ -9,6 +9,7 @@ import {
   LOAN_DISPLAY_DECIMALS,
   LOAN_SYMBOL,
 } from "../lib/addresses.js"
+import { ACTIVE_CHAIN, CHAIN_ID } from "../lib/chain.js"
 import { formatAmount, formatCountdown, formatUnits } from "../lib/format.js"
 import type { RfqDetail } from "../lib/queries.js"
 import {
@@ -75,7 +76,7 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
   const [expiryMinutesInput, setExpiryMinutesInput] = useState("60")
   const [confirmingDefault, setConfirmingDefault] = useState<Record<string, boolean>>({})
   const nowSec = useNowSeconds()
-  const { address, isConnected } = useAccount()
+  const { address, isConnected, chainId } = useAccount()
 
   const { data: openRfqs = [], isLoading } = useOpenRfqs()
   const { data: myLoans = [] } = useMakerLoans()
@@ -183,6 +184,10 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
   }
 
   const connected = isConnected && !!address
+  // Signing/sending on the wrong chain can't work (the wallet client is pinned to CHAIN_ID) —
+  // gate the action, and let the red banner up top explain the switch.
+  const wrongChain = connected && chainId !== CHAIN_ID
+  const canQuote = connected && !wrongChain
 
   return (
     <Card className="border-neutral-200 shadow-sm shadow-neutral-900/5">
@@ -194,6 +199,11 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
           <AddressPill address={address} />
         ) : (
           <span className="text-xs text-neutral-400">read-only — connect a wallet to quote</span>
+        )}
+        {wrongChain && (
+          <span className="text-xs text-red-600">
+            wrong network — switch to {ACTIVE_CHAIN.name}
+          </span>
         )}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -237,8 +247,14 @@ export function MakerPanel({ onStatus }: { onStatus: (event: StatusEvent) => voi
                     <Button
                       type="button"
                       size="sm"
-                      disabled={!connected || sendQuote.isPending}
-                      title={connected ? undefined : "Connect a wallet to quote"}
+                      disabled={!canQuote || sendQuote.isPending}
+                      title={
+                        canQuote
+                          ? undefined
+                          : wrongChain
+                            ? `Switch your wallet to ${ACTIVE_CHAIN.name} to quote`
+                            : "Connect a wallet to quote"
+                      }
                       onClick={() => startQuote(rfq)}
                     >
                       Quote
