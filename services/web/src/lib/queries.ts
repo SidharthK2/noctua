@@ -2,7 +2,8 @@ import { signQuote } from "@noctua/shared"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { Address } from "viem"
 import { maxUint256 } from "viem"
-import { useAccount, usePublicClient, useWalletClient } from "wagmi"
+import { useAccount, usePublicClient } from "wagmi"
+import { getWalletClient } from "wagmi/actions"
 import type { QuoteWire, RfqWire } from "../api.js"
 import { createRfq, getRfq, listRfqs, submitQuote } from "../api.js"
 import { erc20Abi, noctuaAbi } from "./abi.js"
@@ -17,6 +18,7 @@ import { ACTIVE_CHAIN, CHAIN_ID, IS_MAINNET } from "./chain.js"
 import { parseUnits } from "./format.js"
 import { wireQuoteToOnchain } from "./quote.js"
 import type { StatusEvent } from "./status.js"
+import { wagmiConfig } from "./wagmi.js"
 
 const FAUCET_LOAN_AMOUNT = parseUnits("100000000", LOAN_DECIMALS) // ₩100,000,000 KRWQ
 const FAUCET_COLLATERAL_AMOUNT = parseUnits("100", COLLATERAL_DECIMALS) // 100 WETH
@@ -124,8 +126,20 @@ export function useBalances() {
   })
 }
 
-/** Error for actions that need the wallet on the active chain. `useWalletClient` is pinned to
- * `CHAIN_ID`, so it returns nothing while the wallet sits on another chain — name the actual
+/** Resolves the wallet client at action time (not render time), pinned to the app chain. This
+ * kills the "connected but walletClient still undefined" race a render-time hook snapshot has,
+ * and guarantees a transaction can only ever go out on CHAIN_ID. Returns undefined when the
+ * wallet is disconnected or on another chain. */
+async function resolveWalletClient() {
+  try {
+    return await getWalletClient(wagmiConfig, { chainId: CHAIN_ID })
+  } catch {
+    return undefined
+  }
+}
+
+/** Error for actions that need the wallet on the active chain. The wallet client is pinned to
+ * `CHAIN_ID`, so it resolves to nothing while the wallet sits on another chain — name the actual
  * problem instead of claiming the user isn't connected. */
 function walletNotReadyError(walletChainId: number | undefined): Error {
   if (walletChainId !== undefined && walletChainId !== CHAIN_ID) {
@@ -171,11 +185,11 @@ export function usePostRfqMutation(onStatus: (event: StatusEvent) => void) {
 /** Accept flow: approve collateral, then fill the quote on-chain via the connected wallet. */
 export function useAcceptQuoteMutation(onStatus: (event: StatusEvent) => void) {
   const { address, chainId: walletChainId } = useAccount()
-  const { data: walletClient } = useWalletClient({ chainId: CHAIN_ID })
   const publicClient = usePublicClient({ chainId: CHAIN_ID })
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ rfqId, quoteWire }: { rfqId: string; quoteWire: QuoteWire }) => {
+      const walletClient = await resolveWalletClient()
       if (!walletClient || !publicClient) throw walletNotReadyError(walletChainId)
       const onchain = wireQuoteToOnchain(quoteWire.quote)
 
@@ -215,11 +229,11 @@ export function useAcceptQuoteMutation(onStatus: (event: StatusEvent) => void) {
 /** Repay flow: approve repayment amount, then repay the loan on-chain via the connected wallet. */
 export function useRepayLoanMutation(onStatus: (event: StatusEvent) => void) {
   const { address, chainId: walletChainId } = useAccount()
-  const { data: walletClient } = useWalletClient({ chainId: CHAIN_ID })
   const publicClient = usePublicClient({ chainId: CHAIN_ID })
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ rfqId: _rfqId, quoteWire }: { rfqId: string; quoteWire: QuoteWire }) => {
+      const walletClient = await resolveWalletClient()
       if (!walletClient || !publicClient) throw walletNotReadyError(walletChainId)
       const onchain = wireQuoteToOnchain(quoteWire.quote)
 
@@ -257,11 +271,11 @@ export function useRepayLoanMutation(onStatus: (event: StatusEvent) => void) {
  * the maker, so unlike fill/repay there's no approve step. */
 export function useClaimDefaultMutation(onStatus: (event: StatusEvent) => void) {
   const { address, chainId: walletChainId } = useAccount()
-  const { data: walletClient } = useWalletClient({ chainId: CHAIN_ID })
   const publicClient = usePublicClient({ chainId: CHAIN_ID })
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ rfqId: _rfqId, quoteWire }: { rfqId: string; quoteWire: QuoteWire }) => {
+      const walletClient = await resolveWalletClient()
       if (!walletClient || !publicClient) throw walletNotReadyError(walletChainId)
       const onchain = wireQuoteToOnchain(quoteWire.quote)
 
@@ -290,7 +304,6 @@ export function useClaimDefaultMutation(onStatus: (event: StatusEvent) => void) 
  * popup) and submit a quote as the connected wallet. */
 export function useSendQuoteMutation(onStatus: (event: StatusEvent) => void) {
   const { address, chainId: walletChainId } = useAccount()
-  const { data: walletClient } = useWalletClient({ chainId: CHAIN_ID })
   const publicClient = usePublicClient({ chainId: CHAIN_ID })
   const queryClient = useQueryClient()
   return useMutation({
@@ -303,6 +316,7 @@ export function useSendQuoteMutation(onStatus: (event: StatusEvent) => void) {
       repaymentInput: string
       expiryMinutesInput: string
     }) => {
+      const walletClient = await resolveWalletClient()
       if (!walletClient || !publicClient || !address) throw walletNotReadyError(walletChainId)
 
       const approveHash = await walletClient.writeContract({
@@ -355,12 +369,12 @@ export function useSendQuoteMutation(onStatus: (event: StatusEvent) => void) {
  * so this is hard-disabled on chain 8453 (the UI also hides the button there). */
 export function useFaucetMutation(onStatus: (event: StatusEvent) => void) {
   const { address, chainId: walletChainId } = useAccount()
-  const { data: walletClient } = useWalletClient({ chainId: CHAIN_ID })
   const publicClient = usePublicClient({ chainId: CHAIN_ID })
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async () => {
       if (IS_MAINNET) throw new Error("faucet is testnet-only")
+      const walletClient = await resolveWalletClient()
       if (!walletClient || !publicClient || !address) throw walletNotReadyError(walletChainId)
 
       const krwqHash = await walletClient.writeContract({

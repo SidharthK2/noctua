@@ -1,6 +1,7 @@
-import { Loader2, X } from "lucide-react"
+import { ConnectButton } from "@rainbow-me/rainbowkit"
+import { Loader2 } from "lucide-react"
 import { useState } from "react"
-import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi"
+import { useAccount } from "wagmi"
 import { AddressPill } from "./components/address-pill.js"
 import { BorrowerPanel } from "./components/BorrowerPanel.js"
 import { MakerPanel } from "./components/MakerPanel.js"
@@ -29,66 +30,6 @@ function ConfigErrorPage({ missing }: { missing: string[] }) {
           ))}
         </ul>
       </div>
-    </div>
-  )
-}
-
-function WalletControl() {
-  const { address, isConnected } = useAccount()
-  const { connect, connectors, isPending } = useConnect()
-  const { disconnect } = useDisconnect()
-
-  if (isConnected && address) {
-    return (
-      <div className="flex items-center gap-1">
-        <AddressPill address={address} />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="text-neutral-500 hover:text-red-600"
-          title="Disconnect"
-          onClick={() => disconnect()}
-        >
-          <X className="size-3.5" />
-        </Button>
-      </div>
-    )
-  }
-
-  return (
-    <Button
-      type="button"
-      size="sm"
-      disabled={isPending || connectors.length === 0}
-      onClick={() => connect({ connector: connectors[0] })}
-    >
-      {isPending && <Loader2 className="size-3.5 animate-spin" />}
-      Connect wallet
-    </Button>
-  )
-}
-
-function WrongNetworkBanner() {
-  const { isConnected, chainId } = useAccount()
-  const { switchChain, isPending } = useSwitchChain()
-
-  if (!isConnected || chainId === ACTIVE_CHAIN.id) return null
-
-  return (
-    <div className="flex items-center justify-center gap-3 border-b border-red-200 bg-red-50 px-6 py-1.5 text-xs text-red-700">
-      <span className="size-1.5 shrink-0 rounded-full bg-red-500" />
-      Wrong network — connected to chain {chainId ?? "unknown"}.
-      <Button
-        type="button"
-        size="xs"
-        variant="destructive"
-        disabled={isPending}
-        onClick={() => switchChain({ chainId: ACTIVE_CHAIN.id })}
-      >
-        {isPending && <Loader2 className="size-3 animate-spin" />}
-        Switch to {ACTIVE_CHAIN.name}
-      </Button>
     </div>
   )
 }
@@ -134,16 +75,12 @@ export function App() {
         </div>
         <div className="flex items-center gap-2">
           <FaucetButton onStatus={setLastEvent} />
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-2 py-0.5 font-mono text-xs tabular-nums text-neutral-600">
-            <span className="size-1.5 rounded-full bg-success" />
-            chain {ACTIVE_CHAIN.id}
-          </span>
           <AddressPill address={NOCTUA_ADDRESS} />
-          <WalletControl />
+          {/* RainbowKit owns connect/disconnect, account modal, and the wrong-network state
+              (its chain chip turns red and opens the switch modal). */}
+          <ConnectButton showBalance={false} chainStatus="icon" accountStatus="address" />
         </div>
       </header>
-
-      <WrongNetworkBanner />
 
       <main className="mx-auto grid w-full max-w-screen-2xl flex-1 grid-cols-1 items-start gap-6 p-6 lg:grid-cols-2">
         <MakerPanel onStatus={setLastEvent} />
