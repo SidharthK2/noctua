@@ -17,6 +17,7 @@ import {
   useMyRfqs,
   usePostRfqMutation,
   useRepayLoanMutation,
+  useWithdrawRfqMutation,
 } from "../lib/queries.js"
 import { wireQuoteToOnchain } from "../lib/quote.js"
 import type { StatusEvent } from "../lib/status.js"
@@ -84,6 +85,7 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
   const postRfq = usePostRfqMutation(onStatus)
   const acceptQuote = useAcceptQuoteMutation(onStatus)
   const repayLoan = useRepayLoanMutation(onStatus)
+  const withdraw = useWithdrawRfqMutation(onStatus)
 
   if (!isConnected || !address) {
     return (
@@ -174,7 +176,26 @@ export function BorrowerPanel({ onStatus }: { onStatus: (event: StatusEvent) => 
             maturity={BigInt(detail.maturity)}
             nowSec={nowSec}
           />
-          <StatusBadge status={detail.status as BadgeStatus} />
+          <div className="flex items-center gap-1.5">
+            {detail.status === "open" && !accepted && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="text-neutral-500 hover:text-red-600"
+                disabled={withdraw.isPending}
+                title="Remove this request from the book — quotes on it expire with it"
+                onClick={() => withdraw.mutate({ rfqId: detail.id })}
+              >
+                {withdraw.isPending && withdraw.variables?.rfqId === detail.id ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  "Withdraw"
+                )}
+              </Button>
+            )}
+            <StatusBadge status={detail.status as BadgeStatus} />
+          </div>
         </div>
 
         {accepted && (

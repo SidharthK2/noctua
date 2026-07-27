@@ -5,7 +5,7 @@ import { maxUint256 } from "viem"
 import { useAccount, usePublicClient } from "wagmi"
 import { getWalletClient } from "wagmi/actions"
 import type { QuoteWire, RfqWire } from "../api.js"
-import { createRfq, getRfq, listRfqs, submitQuote } from "../api.js"
+import { createRfq, getRfq, listRfqs, submitQuote, withdrawRfq } from "../api.js"
 import { erc20Abi, noctuaAbi } from "./abi.js"
 import {
   COLLATERAL_ASSET_ADDRESS,
@@ -178,6 +178,24 @@ export function usePostRfqMutation(onStatus: (event: StatusEvent) => void) {
     },
     onError: (err) => {
       onStatus({ kind: "error", label: "post RFQ failed", message: (err as Error).message })
+    },
+  })
+}
+
+/** Withdraws an open RFQ from the book. Off-chain bookkeeping only — quotes are offers that
+ * only the borrower can execute, so there is nothing on-chain to cancel before a fill. */
+export function useWithdrawRfqMutation(onStatus: (event: StatusEvent) => void) {
+  const { address } = useAccount()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ rfqId }: { rfqId: string }) => withdrawRfq(rfqId),
+    onSuccess: (rfq) => {
+      onStatus({ kind: "info", label: `withdrew request ${rfq.id.slice(0, 8)}` })
+      queryClient.invalidateQueries({ queryKey: queryKeys.myRfqs(address) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.openRfqs() })
+    },
+    onError: (err) => {
+      onStatus({ kind: "error", label: "withdraw failed", message: (err as Error).message })
     },
   })
 }
